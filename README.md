@@ -1,3 +1,5 @@
+<!-- mcp-name: io.github.microhenrio/openocd-mcp -->
+
 # OpenOCD MCP Server
 
 Debug microcontrollers directly from Claude. This is an [MCP](https://modelcontextprotocol.io)

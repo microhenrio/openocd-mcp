@@ -31,6 +31,17 @@ Homepage = "https://github.com/microhenrio/openocd-mcp"
 [tool.hatch.build.targets.wheel]
 packages = ["openocd_mcp"]
 
+[tool.hatch.build.targets.sdist]
+# Keep the source distribution lean: ship the package + project files only, not
+# the bundled OpenOCD binaries (./openocd) or SVD files (./svd).
+only-include = [
+    "openocd_mcp",
+    "README.md",
+    "LICENSE",
+    "pyproject.toml",
+    "openocd-mcp.example.json",
+]
+
 # The bundled OpenOCD binaries (./openocd, ~7.6 MB, GPL) and SVD files (./svd)
 # are intentionally NOT packed into the wheel: they are platform-specific and
 # license-encumbered. They ship with the repo/zip for the self-contained
