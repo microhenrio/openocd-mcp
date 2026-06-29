@@ -1,176 +1,118 @@
 # OpenOCD MCP Server
 
-An MCP server that lets Claude debug microcontrollers through OpenOCD: flash,
-halt/step, read/write memory and registers, set breakpoints, read variables by
-name (from your `.elf`) and peripheral registers by name (from a CMSIS-SVD file).
+Debug microcontrollers directly from Claude. This is an [MCP](https://modelcontextprotocol.io)
+server that drives [OpenOCD](https://openocd.org/), letting Claude flash firmware,
+control execution, and inspect a running target — and read your variables and
+peripheral registers **by name** instead of raw addresses.
 
-It is **project-agnostic** — one installed server works with any chip/board/project.
+## Description
 
-OpenOCD itself is **bundled** in `./openocd`, so there is nothing extra to
-download — the project is self-contained.
+Once connected to a target through a debug probe (ST-Link, J-Link, CMSIS-DAP, …),
+Claude can:
 
-## Install (each machine, once)
+- **Flash firmware** — program and verify `.elf` / `.bin` / `.hex` images
+- **Control execution** — halt, resume, single-step, reset
+- **Inspect state** — read/write CPU registers and memory
+- **Set breakpoints** — add/remove/list hardware & software breakpoints
+- **Read variables by name** — from your firmware's `.elf` symbols (e.g. `read_variable uart_rx_count`)
+- **Read peripheral registers by name** — from a CMSIS-SVD file, decoded into named bitfields (e.g. `RCC.CR`, `GPIOA.MODER`)
 
-**Prerequisites:** [Python 3.10+](https://www.python.org/downloads/) (tick
-"Add python.exe to PATH" during install) and [Claude Code](https://claude.com/claude-code).
+The server is **chip-agnostic** — it works with any target OpenOCD supports; you
+point it at your chip's config and (optionally) SVD/ELF. It can also **start
+OpenOCD for you** and **download OpenOCD automatically** for your platform, so
+there's nothing else to install by hand.
 
-Then just **double-click `setup.bat`** (or run it from a terminal). It:
+## Installation
 
-1. creates the Python virtual environment (`.venv`)
-2. installs the dependencies
-3. registers the server with Claude Code at **user scope** (available in every project)
+**Prerequisites:** Python 3.10+, [Claude Code](https://claude.com/claude-code),
+and a debug probe connected to your target.
 
-When it finishes, **restart Claude Code** so it loads the server. Done — OpenOCD
-is bundled, so there's nothing else to download.
+Clone and install the package into a virtual environment:
 
-<details>
-<summary>Manual install (if you'd rather not use setup.bat)</summary>
-
-```
+```bash
+git clone https://github.com/microhenrio/openocd-mcp
+cd openocd-mcp
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
-claude mcp add --scope user openocd -- "<PROJECT>\.venv\Scripts\openocd-mcp.exe"
 ```
 
-`pip install -e .` installs the `openocd_mcp` package (and its dependencies) in
-editable mode and creates the `openocd-mcp` console script that Claude launches.
-</details>
+Install it (creates the `openocd-mcp` command):
 
-To confirm it registered: `claude mcp list` should show `openocd: ... ✓ Connected`.
+```bash
+# Windows
+.venv\Scripts\python -m pip install -e .
 
-## Distributing to your team
-
-The project is a self-contained folder:
-
-1. Zip it **without** `.venv` and `scratchpad/` (a virtualenv is machine-specific
-   and not portable).
-2. A teammate unzips it anywhere and runs `setup.bat`.
-
-The OpenOCD binaries, scripts, and bundled SVD travel with the folder. Only the
-venv and the Claude registration are per-machine (both handled by `setup.bat`).
-
-> OpenOCD binary resolution order: `OPENOCD_BIN` env var → bundled `./openocd` →
-> auto-downloaded cache → `openocd` on PATH. The bundle is used by default; a
-> teammate can point at their own install via the env var if they prefer.
-
-## Where OpenOCD comes from (pip / PyPI installs)
-
-The bundled `./openocd` ships only with the git/zip distribution. A `pip install`
-from a package index has no bundled binary, so the server gets OpenOCD by, in
-order: `OPENOCD_BIN`, an auto-downloaded cache, or `openocd` on PATH. If none are
-present it **auto-downloads** the right xPack OpenOCD build for the OS/arch on
-first `connect` (SHA-256 verified, cached under the user data dir). You can also
-provision it explicitly:
-
-```
-openocd-mcp install-openocd          # or: python -m openocd_mcp install-openocd
+# macOS / Linux
+.venv/bin/python -m pip install -e .
 ```
 
-or, from within Claude, just say "install OpenOCD" (the `install_openocd` tool).
-This keeps the published wheel pure-Python and cross-platform, and avoids
-redistributing the GPL binaries in the package itself.
+Register the server with Claude Code (user scope makes it available in every
+project):
 
-## Tell it which chip you're debugging (per project)
+```bash
+# Windows
+claude mcp add --scope user openocd -- "%CD%\.venv\Scripts\openocd-mcp.exe"
 
-Chip-specific settings (`target_cfg`, `svd_file`, `elf_file`) are **not** baked in
-— you provide them per project. Easiest: drop an **`openocd-mcp.json`** in your
-firmware project's root (copy `openocd-mcp.example.json`):
+# macOS / Linux
+claude mcp add --scope user openocd -- "$PWD/.venv/bin/openocd-mcp"
+```
+
+> **Windows shortcut:** instead of the steps above you can just run `setup.bat`,
+> which creates the environment, installs the package, and registers it.
+
+Then **restart Claude Code** so it loads the server. Verify with:
+
+```bash
+claude mcp list      # openocd: ... ✓ Connected
+```
+
+**OpenOCD** is obtained automatically: a build for your OS/architecture is
+downloaded and cached on first connect (checksum-verified). You can also fetch it
+ahead of time with `openocd-mcp install-openocd`, or use an existing install by
+setting the `OPENOCD_BIN` environment variable.
+
+## How to work with it
+
+### 1. Point it at your chip
+
+Each firmware project tells the server which target it's debugging. Create an
+`openocd-mcp.json` in your project root (a template is in
+[`openocd-mcp.example.json`](openocd-mcp.example.json)):
 
 ```json
 {
   "target_cfg": "target/stm32g0x.cfg",
-  "svd_file":   "svd/STM32G0B0.svd",
-  "elf_file":   "C:\\path\\to\\your\\build\\firmware.elf"
+  "svd_file": "path/to/STM32G0B0.svd",
+  "elf_file": "path/to/build/firmware.elf"
 }
 ```
 
-The server loads it automatically. (`target_cfg` is relative to OpenOCD's scripts
-dir; `svd_file` may be relative to this MCP project; `elf_file` is the path to
-your firmware build output.) Alternatively just **tell Claude the chip** and it
-will call the `configure` tool for you. `show_config` shows what's in effect.
+- `target_cfg` / `interface_cfg` — OpenOCD configs (relative to its scripts dir).
+  Defaults to an ST-Link probe; set `target_cfg` for your chip.
+- `svd_file` — CMSIS-SVD file for the chip (enables peripheral registers by name).
+- `elf_file` — your firmware build output (enables variables by name).
 
-## Working with it from Claude
+Or simply tell Claude the chip you're using and it will configure the session for
+you. `show_config` reports the active settings at any time.
 
-Once installed and your chip is configured, talk to Claude in plain language from
-your firmware project — it picks the right tools. With the board plugged in:
+### 2. Talk to Claude
+
+With the board plugged in, describe what you want — Claude picks the right tools:
 
 | You say… | What happens |
 |---|---|
-| "connect and halt the target" | Auto-starts OpenOCD, attaches, halts the CPU |
-| "what's the status?" | Reports running/halted + current PC |
-| "read the variable `uart_rx_count`" | Looks it up in your `.elf`, reads it off the chip |
+| "connect and halt the target" | Starts OpenOCD if needed, attaches, halts the CPU |
+| "what's the status?" | Reports running/halted and the current program counter |
+| "read the variable `sensor_value`" | Looks it up in the `.elf` and reads it off the chip |
 | "set `motor_enabled` to 1" | Writes the variable by name |
-| "read GPIOA.MODER" | Reads + decodes the register's named bitfields |
-| "list the RCC registers" | Lists registers from the SVD |
-| "break at 0x08001234, then reset and run" | Sets a breakpoint, resets |
-| "flash `build/firmware.elf` and run it" | Programs and verifies the firmware |
-| "dump 64 bytes of RAM at 0x20000000" | Reads memory |
+| "read `GPIOA.MODER`" | Reads the register and decodes its named bitfields |
+| "list the `RCC` registers" | Lists registers from the SVD |
+| "break at `0x08001234`, then reset and run" | Sets a breakpoint and resets |
+| "flash `build/firmware.elf` and run it" | Programs, verifies, and restarts |
+| "dump 64 bytes of RAM at `0x20000000`" | Reads memory |
 
-You don't call tools by name — describe what you want and Claude maps it to the
-tools below. The raw tool names are just there if you want to be explicit.
+You don't call tools by name — describe the goal and Claude maps it to the
+underlying tools.
 
-> First time in a session, "connect" auto-starts OpenOCD. The target must be
-> **halted** to read registers/variables — Claude will halt first when needed.
-
-## Tools (33)
-
-- **Config:** `configure`, `show_config`, `install_openocd`
-- **Process:** `start_openocd`, `stop_openocd`, `status`, `connect`
-- **CPU:** `halt`, `resume`, `reset`, `step`
-- **Registers:** `read_registers`, `read_register`, `write_register`
-- **Memory:** `read_memory`, `write_memory`, `read_peripheral`
-- **Variables (by name):** `load_elf`, `read_variable`, `write_variable`, `list_variables`
-- **Peripherals (by name):** `load_svd`, `read_peripheral_register`, `write_peripheral_register`, `list_peripheral_registers`
-- **Breakpoints:** `add_breakpoint`, `remove_breakpoint`, `list_breakpoints`, `remove_all_breakpoints`
-- **Flash:** `flash_write`, `flash_info`, `flash_erase_sector`
-- **Escape hatch:** `run_command` (any raw OpenOCD command)
-
-## Files
-
-| File | Role |
-|---|---|
-| `pyproject.toml` | Package metadata + `openocd-mcp` entry point |
-| `openocd_mcp/server.py` | MCP tools (`main()` entry point) |
-| `openocd_mcp/openocd.py` | OpenOCD TCL-RPC client (port 6666) |
-| `openocd_mcp/launcher.py` | Starts/stops OpenOCD as a subprocess |
-| `openocd_mcp/symbols.py` | ELF symbol reader (variables by name) |
-| `openocd_mcp/svd.py` | CMSIS-SVD parser (peripheral registers by name) |
-| `openocd_mcp/config.py` | OpenOCD resolution + layered project settings |
-| `openocd_mcp/provision.py` | Downloads + caches OpenOCD per-OS (PyPI install path) |
-| `setup.bat` | One-click install (venv + package + Claude registration) |
-| `openocd-mcp.example.json` | Template project config |
-| `openocd/` | **Bundled** OpenOCD 0.12 (binary, DLLs, scripts) |
-| `svd/` | Bundled CMSIS-SVD files (add your chip's `.svd` here) |
-
-## Publishing (official distribution routes)
-
-This is a standard Python package, so the official channels are open if you want
-to go beyond the internal zip:
-
-- **Private PyPI / Artifactory / Azure Artifacts** — `pip install build && python -m build`,
-  upload the wheel, then teammates `pip install openocd-mcp` from your index and
-  register `openocd-mcp` with Claude. (OpenOCD then comes from `OPENOCD_BIN`/PATH,
-  since the wheel doesn't vendor the GPL binary.)
-- **Public PyPI + the [official MCP Registry](https://registry.modelcontextprotocol.io/)** —
-  publish the wheel to PyPI, then add a `server.json` and submit to the registry
-  under a reverse-DNS namespace tied to your GitHub/domain.
-- **Claude Connectors Directory** — for a one-click *Claude Desktop* install you
-  can package as an `.mcpb` bundle and submit for review. (Aimed at Desktop, not
-  Claude Code, and needs a privacy policy + review — heavier than needed for an
-  internal tool.)
-
-Bump `version` in `pyproject.toml` (and `openocd_mcp/__init__.py`) for each release.
-
-## Adding another chip
-
-- **Target/probe:** any `interface/*.cfg` and `target/*.cfg` shipped with OpenOCD
-  are in `openocd/openocd/scripts/`. Set them via `configure` or the project file.
-- **Peripheral names:** drop the chip's CMSIS-SVD into `svd/` and point
-  `svd_file` at it (e.g. `"svd/STM32F407.svd"`). ST's SVDs ship with
-  STM32CubeProgrammer (`...\STM32CubeProgrammer\SVD\`) and STM32CubeIDE.
-
-## Licensing
-
-OpenOCD is GPL v2 (full license texts under `openocd/distro-info/licenses/`).
-Redistributing the binaries is permitted under the GPL. Bundled SVD files are
-provided by their respective silicon vendors under their own terms.
+> The target must be **halted** to read registers, memory, or variables — Claude
+> halts first when needed. The first `connect` of a session starts OpenOCD
+> automatically.
