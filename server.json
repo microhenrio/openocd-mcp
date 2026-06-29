@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.microhenrio/openocd-mcp",
   "title": "OpenOCD Debugger",
-  "description": "Debug microcontrollers from Claude through OpenOCD: flash, halt/step, read/write memory and registers, set breakpoints, and inspect variables and peripheral registers by name.",
+  "description": "Debug microcontrollers from Claude via OpenOCD: flash, breakpoints, memory and registers by name.",
   "version": "0.1.0",
   "repository": {
     "url": "https://github.com/microhenrio/openocd-mcp",
