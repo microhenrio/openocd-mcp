@@ -1,0 +1,7 @@
+# Normalize line endings for our own text files.
+* text=auto
+
+# Keep the vendored OpenOCD tree and SVD files exactly as shipped (no EOL
+# conversion) — they include binaries, firmware images, and scripts.
+openocd/** -text
+svd/** -text

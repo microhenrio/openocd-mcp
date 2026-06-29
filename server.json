@@ -1,0 +1,35 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.microhenrio/openocd-mcp",
+  "title": "OpenOCD Debugger",
+  "description": "Debug microcontrollers from Claude through OpenOCD: flash, halt/step, read/write memory and registers, set breakpoints, and inspect variables and peripheral registers by name.",
+  "version": "0.1.0",
+  "repository": {
+    "url": "https://github.com/microhenrio/openocd-mcp",
+    "source": "github"
+  },
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "openocd-mcp",
+      "version": "0.1.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "OPENOCD_BIN",
+          "description": "Path to the OpenOCD executable. Optional: if unset, the server uses a bundled copy (when present) or 'openocd' on PATH.",
+          "isRequired": false
+        },
+        {
+          "name": "OPENOCD_MCP_CONFIG",
+          "description": "Path to a per-project openocd-mcp.json (target_cfg/svd_file/elf_file). Optional: by default the server looks for openocd-mcp.json in the working directory.",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
+}

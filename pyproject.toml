@@ -1,0 +1,38 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openocd-mcp"
+version = "0.1.0"
+description = "MCP server to debug microcontrollers from Claude through OpenOCD (flash, halt/step, memory/registers, breakpoints, variables and peripheral registers by name)."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Hexentronics" }]
+keywords = ["mcp", "openocd", "embedded", "debugging", "stm32", "arm", "swd"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: Software Development :: Debuggers",
+]
+dependencies = [
+    "mcp>=1.9.0",
+    "pyelftools>=0.31",
+    "cmsis-svd>=0.6",
+]
+
+[project.scripts]
+openocd-mcp = "openocd_mcp.server:main"
+
+[project.urls]
+Homepage = "https://github.com/microhenrio/openocd-mcp"
+
+[tool.hatch.build.targets.wheel]
+packages = ["openocd_mcp"]
+
+# The bundled OpenOCD binaries (./openocd, ~7.6 MB, GPL) and SVD files (./svd)
+# are intentionally NOT packed into the wheel: they are platform-specific and
+# license-encumbered. They ship with the repo/zip for the self-contained
+# internal install. pip-installed users provide OpenOCD via the bundled folder
+# (editable install), the OPENOCD_BIN env var, or the system PATH.
