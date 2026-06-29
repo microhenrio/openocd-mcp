@@ -18,16 +18,16 @@ from . import config
 class OpenOCDLauncher:
     def __init__(
         self,
-        binary: str = config.OPENOCD_BIN,
-        scripts: str = config.OPENOCD_SCRIPTS,
+        binary: str = "",
+        scripts: str = "",
         interface_cfg: str = "",
         target_cfg: str = "",
         host: str = config.HOST,
         port: int = config.PORT,
     ):
+        # All empty -> resolved live at start() time (OpenOCD path + project cfgs).
         self.binary = binary
         self.scripts = scripts
-        # Empty -> resolve from the live project settings at start() time.
         self.interface_cfg = interface_cfg
         self.target_cfg = target_cfg
         self.host = host
@@ -71,6 +71,21 @@ class OpenOCDLauncher:
         if self.started_by_us():
             return "OpenOCD already started by this server."
 
+        # Resolve the OpenOCD binary live: explicit -> env/bundled/cached/PATH ->
+        # auto-download as a last resort (first-run provisioning for pip installs).
+        binary, scripts = self.binary, self.scripts
+        if not binary:
+            binary, scripts = config.openocd_paths()
+        if not binary:
+            try:
+                from . import provision
+                binary, scripts = provision.install()
+            except Exception as e:  # noqa: BLE001
+                raise RuntimeError(
+                    "OpenOCD not found and auto-download failed: "
+                    f"{e}. Set OPENOCD_BIN or put 'openocd' on PATH."
+                ) from e
+
         interface_cfg = self.interface_cfg or config.settings.get("interface_cfg")
         target_cfg = self.target_cfg or config.settings.get("target_cfg")
         if not target_cfg:
@@ -80,9 +95,9 @@ class OpenOCDLauncher:
                 "openocd-mcp.json, or pass target_cfg to start_openocd."
             )
 
-        cmd = [self.binary]
-        if self.scripts:  # bundled/explicit scripts dir; omit to let OpenOCD find its own
-            cmd += ["-s", self.scripts]
+        cmd = [binary]
+        if scripts:  # bundled/explicit scripts dir; omit to let OpenOCD find its own
+            cmd += ["-s", scripts]
         cmd += ["-f", interface_cfg, "-f", target_cfg]
         try:
             self._proc = subprocess.Popen(
@@ -94,7 +109,7 @@ class OpenOCDLauncher:
             )
         except FileNotFoundError as e:
             raise RuntimeError(
-                f"OpenOCD binary not found: {self.binary}. Edit config.py."
+                f"OpenOCD binary not found: {binary}. Set OPENOCD_BIN."
             ) from e
 
         self._output.clear()

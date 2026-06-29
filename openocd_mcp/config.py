@@ -23,6 +23,9 @@ A project config file (see openocd-mcp.example.json) looks like:
 """
 import json
 import os
+import shutil
+
+from . import provision
 
 # Package dir (.../openocd_mcp) and the repo/install root that holds the bundled
 # 'openocd/' and 'svd/' folders (the parent, in an editable/zip layout).
@@ -30,12 +33,15 @@ _PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 _REPO_DIR = os.path.dirname(_PKG_DIR)
 
 
-def _resolve_openocd() -> tuple[str, str]:
-    """Locate the OpenOCD binary + script library. Resolution order:
+def openocd_paths() -> tuple[str | None, str]:
+    """Locate the OpenOCD binary + script library, resolved live. Order:
       1. OPENOCD_BIN / OPENOCD_SCRIPTS environment variables.
-      2. The copy bundled with this project (<repo>/openocd) — makes the project
-         self-contained and distributable; no separate download needed.
-      3. 'openocd' on the system PATH (it finds its own scripts).
+      2. The copy bundled with this project (<repo>/openocd) — present in the
+         git/zip distribution, makes it self-contained and offline.
+      3. A copy auto-downloaded by `provision` (the PyPI-install path).
+      4. 'openocd' on the system PATH (it locates its own scripts).
+    Returns (None, "") if OpenOCD is not found anywhere (callers can then offer
+    to download it). Never downloads — this is a read-only lookup.
     """
     env_bin = os.environ.get("OPENOCD_BIN")
     if env_bin:
@@ -46,11 +52,15 @@ def _resolve_openocd() -> tuple[str, str]:
     if os.path.isfile(bundled_bin):
         return bundled_bin, bundled_scripts
 
-    return "openocd", ""  # rely on PATH; OpenOCD locates its own scripts
+    cached_bin, cached_scripts = provision.cached_paths()
+    if cached_bin:
+        return cached_bin, cached_scripts
 
+    on_path = shutil.which("openocd")
+    if on_path:
+        return on_path, ""
 
-# --- The OpenOCD installation (bundled with the project by default) --------
-OPENOCD_BIN, OPENOCD_SCRIPTS = _resolve_openocd()
+    return None, ""
 
 # TCL-RPC port the MCP client connects to (4444 is the human telnet port).
 HOST = "localhost"

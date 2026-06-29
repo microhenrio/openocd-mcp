@@ -109,9 +109,26 @@ def show_config() -> str:
     lines = [f"settings source: {s.source}"]
     for k, v in s.as_dict().items():
         lines.append(f"  {k}: {v or '(unset)'}")
-    lines.append(f"  openocd_bin: {config.OPENOCD_BIN}")
+    binp, _ = config.openocd_paths()
+    lines.append(f"  openocd_bin: {binp or '(not found — call install_openocd)'}")
     lines.append(f"  port: {config.HOST}:{config.PORT}")
     return "\n".join(lines)
+
+
+@mcp.tool()
+def install_openocd() -> str:
+    """
+    Download and cache OpenOCD for this OS/architecture (if not already present),
+    so the server can run without a separate OpenOCD install. Verifies a pinned
+    SHA-256. Needed only when OpenOCD isn't bundled or on PATH (e.g. a pip install).
+    """
+    from . import provision
+    msgs: list[str] = []
+    try:
+        binp, _ = provision.install(log=msgs.append)
+    except Exception as e:  # noqa: BLE001
+        return "ERROR: " + str(e) + (("\n" + "\n".join(msgs)) if msgs else "")
+    return "\n".join(msgs) + f"\nOpenOCD ready: {binp}"
 
 
 # ---------------------------------------------------------------------------
@@ -544,7 +561,17 @@ def run_command(command: str) -> str:
 # ---------------------------------------------------------------------------
 
 def main() -> None:
-    """Console-script entry point (`openocd-mcp`)."""
+    """Console-script entry point (`openocd-mcp`).
+
+    `openocd-mcp install-openocd` downloads OpenOCD and exits; with no args it
+    runs the MCP server over stdio.
+    """
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "install-openocd":
+        from . import provision
+        provision.install()
+        return
     mcp.run()
 
 

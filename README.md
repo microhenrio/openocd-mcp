@@ -50,8 +50,25 @@ The OpenOCD binaries, scripts, and bundled SVD travel with the folder. Only the
 venv and the Claude registration are per-machine (both handled by `setup.bat`).
 
 > OpenOCD binary resolution order: `OPENOCD_BIN` env var → bundled `./openocd` →
-> `openocd` on PATH. The bundle is used by default; a teammate can point at their
-> own install via the env var if they prefer.
+> auto-downloaded cache → `openocd` on PATH. The bundle is used by default; a
+> teammate can point at their own install via the env var if they prefer.
+
+## Where OpenOCD comes from (pip / PyPI installs)
+
+The bundled `./openocd` ships only with the git/zip distribution. A `pip install`
+from a package index has no bundled binary, so the server gets OpenOCD by, in
+order: `OPENOCD_BIN`, an auto-downloaded cache, or `openocd` on PATH. If none are
+present it **auto-downloads** the right xPack OpenOCD build for the OS/arch on
+first `connect` (SHA-256 verified, cached under the user data dir). You can also
+provision it explicitly:
+
+```
+openocd-mcp install-openocd          # or: python -m openocd_mcp install-openocd
+```
+
+or, from within Claude, just say "install OpenOCD" (the `install_openocd` tool).
+This keeps the published wheel pure-Python and cross-platform, and avoids
+redistributing the GPL binaries in the package itself.
 
 ## Tell it which chip you're debugging (per project)
 
@@ -95,9 +112,9 @@ tools below. The raw tool names are just there if you want to be explicit.
 > First time in a session, "connect" auto-starts OpenOCD. The target must be
 > **halted** to read registers/variables — Claude will halt first when needed.
 
-## Tools (32)
+## Tools (33)
 
-- **Config:** `configure`, `show_config`
+- **Config:** `configure`, `show_config`, `install_openocd`
 - **Process:** `start_openocd`, `stop_openocd`, `status`, `connect`
 - **CPU:** `halt`, `resume`, `reset`, `step`
 - **Registers:** `read_registers`, `read_register`, `write_register`
@@ -119,6 +136,7 @@ tools below. The raw tool names are just there if you want to be explicit.
 | `openocd_mcp/symbols.py` | ELF symbol reader (variables by name) |
 | `openocd_mcp/svd.py` | CMSIS-SVD parser (peripheral registers by name) |
 | `openocd_mcp/config.py` | OpenOCD resolution + layered project settings |
+| `openocd_mcp/provision.py` | Downloads + caches OpenOCD per-OS (PyPI install path) |
 | `setup.bat` | One-click install (venv + package + Claude registration) |
 | `openocd-mcp.example.json` | Template project config |
 | `openocd/` | **Bundled** OpenOCD 0.12 (binary, DLLs, scripts) |
