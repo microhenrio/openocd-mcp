@@ -109,6 +109,9 @@ With the board plugged in, describe what you want — Claude picks the right too
 | "read `GPIOA.MODER`" | Reads the register and decodes its named bitfields |
 | "list the `RCC` registers" | Lists registers from the SVD |
 | "break at `0x08001234`, then reset and run" | Sets a breakpoint and resets |
+| "break at `0x08001234` when `r0` is 42" | Sets a conditional breakpoint (using `[get_reg r0] == 42`) |
+| "break at `0x08001234` after 5 hits" | Sets a hit-count breakpoint |
+| "watch for writes to `0x20000000`" | Sets a hardware data watchpoint |
 | "flash `build/firmware.elf` and run it" | Programs, verifies, and restarts |
 | "dump 64 bytes of RAM at `0x20000000`" | Reads memory |
 

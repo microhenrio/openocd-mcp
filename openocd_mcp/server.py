@@ -342,15 +342,134 @@ def remove_breakpoint(address: str) -> str:
 
 
 @mcp.tool()
+def add_watchpoint(
+    address: str,
+    length: int = 4,
+    type: str = "w",
+    value: str = "",
+    mask: str = "",
+) -> str:
+    """
+    Add a data watchpoint.
+    address : hex address to watch
+    length  : size in bytes (usually 1, 2, or 4)
+    type    : 'r' (read), 'w' (write), or 'a' (access/any)
+    value   : optional hex value to match (hardware dependent)
+    mask    : optional hex mask for the value match
+    """
+    cmd = f"wp {address} {length} {type}"
+    if value:
+        cmd += f" {value}"
+        if mask:
+            cmd += f" {mask}"
+    return _client.send_command(cmd)
+
+
+@mcp.tool()
+def remove_watchpoint(address: str) -> str:
+    """Remove the watchpoint at the given address."""
+    return _client.send_command(f"rwp {address}")
+
+
+@mcp.tool()
 def list_breakpoints() -> str:
-    """List all currently set breakpoints."""
-    return _client.send_command("bp")
+    """List all currently set breakpoints and watchpoints."""
+    bp = _client.send_command("bp")
+    wp = _client.send_command("wp")
+    return f"Breakpoints:\n{bp}\n\nWatchpoints:\n{wp}"
 
 
 @mcp.tool()
 def remove_all_breakpoints() -> str:
-    """Remove every breakpoint that is currently set."""
+    """Remove every breakpoint and watchpoint that is currently set."""
+    _client.send_command("rwp all")
+    # Also clear any custom event handlers and registry
+    _client.send_command("catch { [target current] configure -event halted {} }")
+    _client.send_command("catch { unset _cond_bps }")
     return _client.send_command("rbp all")
+
+
+@mcp.tool()
+def add_conditional_breakpoint(
+    address: str,
+    condition: str,
+) -> str:
+    """
+    Add a conditional breakpoint using a TCL expression.
+    The target will halt only if the condition is true; otherwise it resumes.
+
+    address   : hex address for the breakpoint
+    condition : TCL expression or block.
+                Use 'get_reg(name)' to read registers easily.
+                Use 'get_mem(addr, width)' for memory.
+
+    Examples:
+      'expr {[get_reg pc] == 0x08001234}'
+      'expr {[get_reg r0] > 100}'
+      'incr ::hit_count; expr {$::hit_count >= 5}'
+    """
+    # Initialize helper procs and registry if not present
+    setup_script = """
+    if { [info procs get_reg] == "" } {
+        proc get_reg { name } {
+            set r [reg $name]
+            # matches "name (/32): 0x12345678" or "name: 0x12345678"
+            if { [regexp {0x([0-9a-fA-F]+)} $r match val] } {
+                return [expr 0x$val]
+            }
+            return 0
+        }
+    }
+    if { [info procs get_mem] == "" } {
+        proc get_mem { addr {width 32} } {
+            set cmd "mdw"
+            if { $width == 16 } { set cmd "mdh" }
+            if { $width == 8 } { set cmd "mdb" }
+            set r [$cmd $addr 1]
+            if { [regexp {:\s+([0-9a-fA-F]+)} $r match val] } {
+                return [expr 0x$val]
+            }
+            return 0
+        }
+    }
+    if { ![info exists _cond_bps] } {
+        array set _cond_bps {}
+    }
+    proc _cond_bp_handler {} {
+        global _cond_bps
+        set r [reg pc]
+        if { [regexp {0x([0-9a-fA-F]+)} $r match val] } {
+            set pc [expr 0x$val]
+            # PC might be odd for Thumb, normalize to even
+            set pc_norm [expr $pc & ~1]
+            foreach addr_str [array names _cond_bps] {
+                set addr [expr $addr_str]
+                if { $pc_norm == ($addr & ~1) } {
+                    set cond $_cond_bps($addr_str)
+                    if { ![eval $cond] } {
+                        resume
+                    }
+                    return
+                }
+            }
+        }
+    }
+    [target current] configure -event halted _cond_bp_handler
+    """
+    _client.send_command(setup_script.strip())
+
+    # Add to registry
+    _client.send_command(f"set _cond_bps({address}) {{{condition}}}")
+
+    # Set the hardware breakpoint
+    return _client.send_command(f"bp {address} 2 hw")
+
+
+@mcp.tool()
+def remove_conditional_breakpoint(address: str) -> str:
+    """Remove the conditional breakpoint at the given address."""
+    _client.send_command(f"catch {{ unset _cond_bps({address}) }}")
+    return _client.send_command(f"rbp {address}")
 
 
 # ---------------------------------------------------------------------------
