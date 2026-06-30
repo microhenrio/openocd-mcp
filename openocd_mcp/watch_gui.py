@@ -15,9 +15,11 @@ Connects to an OpenOCD already running on localhost:6666 (start it via the MCP
 server, `openocd-mcp install-openocd` + your usual flow, or start_openocd.bat).
 """
 import argparse
+import atexit
 import re
 
 from . import config
+from .launcher import OpenOCDLauncher
 from .openocd import OpenOCDClient, OpenOCDError
 from .symbols import SymbolTable
 
@@ -156,6 +158,10 @@ def main() -> None:
     p.add_argument("--host", default=config.HOST)
     p.add_argument("--port", type=int, default=config.PORT)
     p.add_argument("--samples", type=int, default=0, help=">0: headless, print N samples and exit")
+    p.add_argument("--autostart", action="store_true",
+                   help="start OpenOCD if it isn't already running (uses the configured target)")
+    p.add_argument("--target", default="", help="target cfg for --autostart, e.g. target/stm32g0x.cfg")
+    p.add_argument("--interface", default="", help="interface cfg for --autostart, e.g. interface/stlink.cfg")
     args = p.parse_args()
 
     names = list(args.names) + [n for n in re.split(r"[,\s]+", args.vars.strip()) if n]
@@ -170,8 +176,20 @@ def main() -> None:
     try:
         sampler.connect()
     except OpenOCDError as e:
-        raise SystemExit(f"Cannot reach OpenOCD at {args.host}:{args.port}: {e}\n"
-                         f"Start OpenOCD first (e.g. via the MCP server or start_openocd.bat).")
+        if not args.autostart:
+            raise SystemExit(
+                f"Cannot reach OpenOCD at {args.host}:{args.port}: {e}\n"
+                f"Start OpenOCD first (via the MCP server or start_openocd.bat), "
+                f"or pass --autostart to have this launch it."
+            )
+        launcher = OpenOCDLauncher(interface_cfg=args.interface, target_cfg=args.target)
+        try:
+            print(launcher.start().splitlines()[0])
+        except RuntimeError as le:
+            raise SystemExit(f"--autostart failed: {le}")
+        atexit.register(launcher.stop)  # stop it when the window closes (if we started it)
+        sampler.connect()
+
     n = sampler.load_elf(elf)
     print(f"Loaded {n} symbols from {elf}")
 

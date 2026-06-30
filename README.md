@@ -165,6 +165,13 @@ window (add more names in the window's entry box). Use `--interval` to change th
 poll rate, or `--samples N` for a headless printout instead of a window. Requires
 Tkinter, which ships with standard Python.
 
+If OpenOCD isn't already running, add `--autostart` and the window launches it
+for you (and stops it on close) — fully standalone, no Claude or `.bat` needed:
+
+```bash
+openocd-watch uwTick xTickCount --elf path/to/firmware.elf --autostart --target target/stm32g0x.cfg
+```
+
 > The target must be **halted** to read registers, memory, or variables — Claude
 > halts first when needed. The first `connect` of a session starts OpenOCD
 > automatically.
