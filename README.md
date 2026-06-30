@@ -19,6 +19,7 @@ Claude can:
   (halt only when an expression is true) and hit-count breakpoints
 - **Watch memory** — hardware **watchpoints** that halt on read/write/access to an address
 - **Read variables by name** — from your firmware's `.elf` symbols (e.g. `read_variable uart_rx_count`)
+- **Live-watch variables** — sample one or more variables over time *without halting* the CPU
 - **Read peripheral registers by name** — from a CMSIS-SVD file, decoded into named bitfields (e.g. `RCC.CR`, `GPIOA.MODER`)
 
 The server is **chip-agnostic** — it works with any target OpenOCD supports; you
@@ -108,6 +109,7 @@ With the board plugged in, describe what you want — Claude picks the right too
 | "what's the status?" | Reports running/halted and the current program counter |
 | "read the variable `sensor_value`" | Looks it up in the `.elf` and reads it off the chip |
 | "set `motor_enabled` to 1" | Writes the variable by name |
+| "watch `tick_count` live for 2 seconds" | Samples it repeatedly *without halting* and shows the values over time |
 | "read `GPIOA.MODER`" | Reads the register and decodes its named bitfields |
 | "list the `RCC` registers" | Lists registers from the SVD |
 | "break at `0x08001234`, then reset and run" | Sets a breakpoint and resets |

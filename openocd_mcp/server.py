@@ -600,6 +600,61 @@ def list_variables(filter: str = "") -> str:
     return head + ":\n" + "\n".join(shown) + tail
 
 
+@mcp.tool()
+def watch_variables(names: str, samples: int = 10, interval_ms: int = 200) -> str:
+    """
+    Live-watch one or more variables WITHOUT halting the CPU: sample them
+    repeatedly while the target runs and return a time-series table.
+
+    names       : comma- or space-separated variable names (requires load_elf).
+    samples     : number of snapshots, 1-200.
+    interval_ms : delay between snapshots in milliseconds.
+
+    Works for RAM globals/statics (read live via background memory access).
+    CPU registers need a halt and aren't supported here. Multi-word values are
+    read non-atomically, so a >4-byte value may be momentarily inconsistent.
+    """
+    if _symbols.count() == 0:
+        elf = config.settings.get("elf_file")
+        if elf:
+            _symbols.load(config.resolve_path(elf))
+        else:
+            return "No ELF loaded. Call load_elf with the path to your firmware .elf."
+
+    requested = [n for n in re.split(r"[,\s]+", names.strip()) if n]
+    if not requested:
+        return "ERROR: no variable names given."
+    resolved = []
+    for n in requested:
+        info = _symbols.lookup(n)
+        if not info:
+            sugg = _symbols.find(n)[:5]
+            hint = f" Close matches: {', '.join(sugg)}" if sugg else ""
+            return f"ERROR: variable '{n}' not found.{hint}"
+        resolved.append((n, info[0], info[1]))
+
+    samples = max(1, min(samples, 200))
+    width_cmd = {1: "mdb", 2: "mdh", 4: "mdw"}
+    rows = []
+    t0 = time.time()
+    for s in range(samples):
+        values = []
+        for _, addr, size in resolved:
+            cmd = width_cmd.get(size, "mdw")
+            words = _parse_words(_client.send_command(f"{cmd} {hex(addr)} 1"))
+            values.append(words[0] if words else None)
+        rows.append((int((time.time() - t0) * 1000), values))
+        if s < samples - 1:
+            time.sleep(interval_ms / 1000.0)
+
+    header = "   ms | " + " | ".join(n for n, _, _ in resolved)
+    out = [header, "-" * len(header)]
+    for ms, values in rows:
+        cells = ["n/a" if v is None else f"0x{v:X} ({v})" for v in values]
+        out.append(f"{ms:5d} | " + " | ".join(cells))
+    return "\n".join(out)
+
+
 # ---------------------------------------------------------------------------
 # Peripheral registers by name (from the CMSIS-SVD file)
 # ---------------------------------------------------------------------------
