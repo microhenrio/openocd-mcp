@@ -15,7 +15,9 @@ Claude can:
 - **Flash firmware** — program and verify `.elf` / `.bin` / `.hex` images
 - **Control execution** — halt, resume, single-step, reset
 - **Inspect state** — read/write CPU registers and memory
-- **Set breakpoints** — add/remove/list hardware & software breakpoints
+- **Set breakpoints** — hardware & software, including **conditional** breakpoints
+  (halt only when an expression is true) and hit-count breakpoints
+- **Watch memory** — hardware **watchpoints** that halt on read/write/access to an address
 - **Read variables by name** — from your firmware's `.elf` symbols (e.g. `read_variable uart_rx_count`)
 - **Read peripheral registers by name** — from a CMSIS-SVD file, decoded into named bitfields (e.g. `RCC.CR`, `GPIOA.MODER`)
 
@@ -109,11 +111,40 @@ With the board plugged in, describe what you want — Claude picks the right too
 | "read `GPIOA.MODER`" | Reads the register and decodes its named bitfields |
 | "list the `RCC` registers" | Lists registers from the SVD |
 | "break at `0x08001234`, then reset and run" | Sets a breakpoint and resets |
+| "break at `0x08001234` when `r0` is 42" | Sets a conditional breakpoint (using `[get_reg r0] == 42`) |
+| "break at `0x08001234` after 5 hits" | Sets a hit-count breakpoint |
+| "watch for writes to `0x20000000`" | Sets a hardware data watchpoint |
 | "flash `build/firmware.elf` and run it" | Programs, verifies, and restarts |
 | "dump 64 bytes of RAM at `0x20000000`" | Reads memory |
 
 You don't call tools by name — describe the goal and Claude maps it to the
 underlying tools.
+
+### 3. Conditional breakpoints & watchpoints
+
+**Conditional breakpoints** halt only when a condition holds — useful for catching
+one specific case in code that runs constantly. Conditions are TCL expressions and
+can use two helpers:
+
+- `get_reg <name>` — a CPU register value (e.g. `get_reg r0`, `get_reg pc`)
+- `get_mem <addr> [width]` — a memory value (e.g. `get_mem 0x20000000`)
+
+Just describe the intent to Claude; it builds the condition:
+
+| You say… | Condition used |
+|---|---|
+| "break at `0x08001234` only when `r0` > 100" | `expr {[get_reg r0] > 100}` |
+| "break at `parse_packet` when the byte at `0x20000005` is `0xFF`" | `expr {[get_mem 0x20000005 8] == 0xFF}` |
+| "stop at `0x08001234` on the 10th time it's hit" | `incr ::hits; expr {$::hits >= 10}` |
+
+When the condition is false the server resumes automatically and keeps going until
+it's true (or you stop it).
+
+**Watchpoints** halt the CPU when it accesses a memory location — ideal for finding
+what corrupts a variable:
+
+- "watch for writes to `0x20000000`"
+- "watch address `0x20000010` for any read or write"
 
 > The target must be **halted** to read registers, memory, or variables — Claude
 > halts first when needed. The first `connect` of a session starts OpenOCD

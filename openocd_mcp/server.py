@@ -7,6 +7,8 @@ Claude calls these tools to inspect and debug a microcontroller target through
 OpenOCD (which the server can start itself).
 """
 import atexit
+import re
+import time
 
 from mcp.server.fastmcp import FastMCP
 
@@ -27,6 +29,50 @@ _launcher = OpenOCDLauncher()
 # Variable names (from .elf) and peripheral registers (from .svd).
 _symbols = SymbolTable()
 _periph = PeripheralMap()
+
+# Conditional breakpoints: normalized (even) address -> TCL condition string.
+# Evaluation/auto-resume is driven from Python (resume/reset), NOT an OpenOCD
+# event handler — OpenOCD ignores `resume` called from inside a 'halted' event.
+_cond_bps: dict[int, str] = {}
+_COND_TIMEOUT = 10.0  # seconds to keep skipping false conditions before giving up
+
+
+def _target_halted() -> bool:
+    return "halted" in _client.send_command("targets").lower()
+
+
+def _read_pc() -> int | None:
+    m = re.search(r"0x[0-9a-fA-F]+", _client.send_command("reg pc"))
+    return int(m.group(0), 16) if m else None
+
+
+def _continue_conditional() -> str:
+    """Drive conditional breakpoints: the target is running; wait for each halt,
+    and at a conditional breakpoint evaluate its condition — resume past it when
+    false, stop when true. Returns a human-readable outcome."""
+    deadline = time.time() + _COND_TIMEOUT
+    skips = 0
+    while time.time() < deadline:
+        while time.time() < deadline and not _target_halted():
+            time.sleep(0.03)
+        if not _target_halted():
+            return f"Target running - no conditional breakpoint hit within {_COND_TIMEOUT:.0f}s ({skips} skip(s))."
+        pc = _read_pc()
+        cond = _cond_bps.get(pc & ~1) if pc is not None else None
+        if cond is None:
+            # Stopped somewhere that isn't a conditional breakpoint.
+            return _client.send_command("reg pc")
+        result = _client.send_command("echo [eval {" + cond + "}]").strip()
+        try:
+            is_true = int(result) != 0
+        except ValueError:
+            return f"Conditional breakpoint at 0x{pc:08X}: condition error: {result}"
+        if is_true:
+            return f"Halted at 0x{pc:08X} - condition true ({skips} skip(s) before it matched)."
+        skips += 1
+        _client.send_command("resume")
+        time.sleep(0.05)  # let the resume take effect before re-checking
+    return f"Gave up after {_COND_TIMEOUT:.0f}s and {skips} skip(s); target left running."
 
 
 def _parse_words(resp: str) -> list[int]:
@@ -227,9 +273,13 @@ def halt() -> str:
 
 @mcp.tool()
 def resume(address: str = "") -> str:
-    """Resume CPU execution. Optionally resume from a specific address."""
-    cmd = f"resume {address}".strip()
-    return _client.send_command(cmd)
+    """Resume CPU execution. Optionally resume from a specific address.
+    If conditional breakpoints are set, this skips past those whose condition is
+    false and stops at the first one whose condition is true (or on any other halt)."""
+    out = _client.send_command(f"resume {address}".strip())
+    if _cond_bps:
+        return _continue_conditional()
+    return out
 
 
 @mcp.tool()
@@ -239,8 +289,13 @@ def reset(mode: str = "halt") -> str:
     mode: 'halt'  — reset and immediately halt (good for debugging)
           'run'   — reset and start running
           'init'  — reset and run init scripts
+    With 'run' and conditional breakpoints set, this honors those conditions
+    (skipping false ones) just like resume.
     """
-    return _client.send_command(f"reset {mode}")
+    out = _client.send_command(f"reset {mode}")
+    if mode == "run" and _cond_bps:
+        return _continue_conditional()
+    return out
 
 
 @mcp.tool()
@@ -342,15 +397,90 @@ def remove_breakpoint(address: str) -> str:
 
 
 @mcp.tool()
+def add_watchpoint(
+    address: str,
+    length: int = 4,
+    type: str = "w",
+    value: str = "",
+    mask: str = "",
+) -> str:
+    """
+    Add a data watchpoint.
+    address : hex address to watch
+    length  : size in bytes (usually 1, 2, or 4)
+    type    : 'r' (read), 'w' (write), or 'a' (access/any)
+    value   : optional hex value to match (hardware dependent)
+    mask    : optional hex mask for the value match
+    """
+    cmd = f"wp {address} {length} {type}"
+    if value:
+        cmd += f" {value}"
+        if mask:
+            cmd += f" {mask}"
+    return _client.send_command(cmd)
+
+
+@mcp.tool()
+def remove_watchpoint(address: str) -> str:
+    """Remove the watchpoint at the given address."""
+    return _client.send_command(f"rwp {address}")
+
+
+@mcp.tool()
 def list_breakpoints() -> str:
-    """List all currently set breakpoints."""
-    return _client.send_command("bp")
+    """List all currently set breakpoints and watchpoints."""
+    bp = _client.send_command("bp")
+    wp = _client.send_command("wp")
+    return f"Breakpoints:\n{bp}\n\nWatchpoints:\n{wp}"
 
 
 @mcp.tool()
 def remove_all_breakpoints() -> str:
-    """Remove every breakpoint that is currently set."""
+    """Remove every breakpoint and watchpoint that is currently set."""
+    _cond_bps.clear()
+    _client.send_command("rwp all")
     return _client.send_command("rbp all")
+
+
+# Defines the TCL helper procs that conditions may use (get_reg / get_mem).
+# Sent once; idempotent.
+_COND_HELPERS = (
+    'if { [info procs get_reg] == "" } { '
+    'proc get_reg { name } { set r [reg $name]; '
+    'if { [regexp {0x([0-9a-fA-F]+)} $r m v] } { return [expr 0x$v] }; return 0 } }; '
+    'if { [info procs get_mem] == "" } { '
+    'proc get_mem { addr {width 32} } { set c mdw; '
+    'if { $width == 16 } { set c mdh }; if { $width == 8 } { set c mdb }; '
+    'set r [$c $addr 1]; if { [regexp {:\\s+([0-9a-fA-F]+)} $r m v] } { return [expr 0x$v] }; '
+    'return 0 } }'
+)
+
+
+@mcp.tool()
+def add_conditional_breakpoint(address: str, condition: str) -> str:
+    """
+    Add a conditional breakpoint. The target halts at `address` only if
+    `condition` evaluates true; otherwise resume/reset-run skips past it.
+
+    address   : hex address for the breakpoint
+    condition : a TCL expression/block. Use get_reg <name> and get_mem <addr> ?width?.
+                It is evaluated when the breakpoint is hit; non-zero = halt.
+
+    Examples:
+      'expr {[get_reg r0] > 100}'
+      'expr {[get_mem 0x20000000] == 0xdeadbeef}'
+      'incr ::hit_count; expr {$::hit_count >= 5}'
+    """
+    _client.send_command(_COND_HELPERS)            # ensure helper procs exist
+    _cond_bps[int(address, 16) & ~1] = condition   # store condition in the server
+    return _client.send_command(f"bp {address} 2 hw")
+
+
+@mcp.tool()
+def remove_conditional_breakpoint(address: str) -> str:
+    """Remove the conditional breakpoint at the given address."""
+    _cond_bps.pop(int(address, 16) & ~1, None)
+    return _client.send_command(f"rbp {address}")
 
 
 # ---------------------------------------------------------------------------
