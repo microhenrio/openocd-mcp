@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.microhenrio/openocd-mcp",
   "title": "OpenOCD Debugger",
-  "description": "Debug microcontrollers from Claude via OpenOCD: flash, breakpoints, memory and registers by name.",
+  "description": "Debug microcontrollers via OpenOCD: flash, breakpoints, memory, registers and variables.",
   "version": "0.1.0",
   "repository": {
     "url": "https://github.com/microhenrio/openocd-mcp",
@@ -15,21 +15,317 @@
       "identifier": "openocd-mcp",
       "version": "0.1.0",
       "runtimeHint": "uvx",
-      "transport": {
-        "type": "stdio"
-      },
+      "transport": { "type": "stdio" },
       "environmentVariables": [
         {
           "name": "OPENOCD_BIN",
-          "description": "Path to the OpenOCD executable. Optional: if unset, the server uses a bundled copy (when present) or 'openocd' on PATH.",
+          "description": "Path to OpenOCD binary; optional.",
           "isRequired": false
         },
         {
           "name": "OPENOCD_MCP_CONFIG",
-          "description": "Path to a per-project openocd-mcp.json (target_cfg/svd_file/elf_file). Optional: by default the server looks for openocd-mcp.json in the working directory.",
+          "description": "Path to openocd-mcp.json config; optional.",
           "isRequired": false
         }
       ]
+    }
+  ],
+
+  "tools": [
+    {
+      "name": "connect",
+      "description": "Start OpenOCD and connect to the target.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "halt",
+      "description": "Halt the CPU.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "resume",
+      "description": "Resume CPU execution.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "reset",
+      "description": "Reset the target.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "status",
+      "description": "Return CPU status and PC.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+
+    {
+      "name": "flash_write",
+      "description": "Flash a firmware ELF/BIN/HEX file.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "flash_verify",
+      "description": "Verify flashed firmware.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "flash_erase_sector",
+      "description": "Erase a flash sector.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "integer" }
+        },
+        "required": ["address"]
+      }
+    },
+
+    {
+      "name": "read_variable",
+      "description": "Read a variable by name.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" }
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "name": "write_variable",
+      "description": "Write a variable by name.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": "integer" }
+        },
+        "required": ["name", "value"]
+      }
+    },
+    {
+      "name": "live_watch_variable",
+      "description": "Watch a variable without halting the CPU.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" }
+        },
+        "required": ["name"]
+      }
+    },
+
+    {
+      "name": "read_memory",
+      "description": "Read raw memory.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "integer" },
+          "length": { "type": "integer" }
+        },
+        "required": ["address", "length"]
+      }
+    },
+    {
+      "name": "write_memory",
+      "description": "Write raw memory.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "integer" },
+          "value": { "type": "integer" }
+        },
+        "required": ["address", "value"]
+      }
+    },
+    {
+      "name": "dump_memory",
+      "description": "Dump memory region.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "integer" },
+          "length": { "type": "integer" }
+        },
+        "required": ["address", "length"]
+      }
+    },
+
+    {
+      "name": "read_register",
+      "description": "Read a CPU register.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "register": { "type": "string" }
+        },
+        "required": ["register"]
+      }
+    },
+    {
+      "name": "write_register",
+      "description": "Write a CPU register.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "register": { "type": "string" },
+          "value": { "type": "integer" }
+        },
+        "required": ["register", "value"]
+      }
+    },
+
+    {
+      "name": "read_peripheral_register",
+      "description": "Read a peripheral register by name.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" }
+        },
+        "required": ["name"]
+      }
+    },
+    {
+      "name": "write_peripheral_register",
+      "description": "Write a peripheral register by name.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "value": { "type": "integer" }
+        },
+        "required": ["name", "value"]
+      }
+    },
+    {
+      "name": "list_peripheral_registers",
+      "description": "List registers of a peripheral.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "peripheral": { "type": "string" }
+        },
+        "required": ["peripheral"]
+      }
+    },
+
+    {
+      "name": "set_breakpoint",
+      "description": "Set a breakpoint.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "integer" }
+        },
+        "required": ["address"]
+      }
+    },
+    {
+      "name": "set_conditional_breakpoint",
+      "description": "Set a conditional breakpoint.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "integer" },
+          "condition": { "type": "string" }
+        },
+        "required": ["address", "condition"]
+      }
+    },
+    {
+      "name": "set_hitcount_breakpoint",
+      "description": "Set a hitcount breakpoint.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "integer" },
+          "count": { "type": "integer" }
+        },
+        "required": ["address", "count"]
+      }
+    },
+    {
+      "name": "clear_breakpoint",
+      "description": "Clear a breakpoint.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "integer" }
+        },
+        "required": ["address"]
+      }
+    },
+
+    {
+      "name": "set_watchpoint",
+      "description": "Set a watchpoint.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "integer" },
+          "type": { "type": "string" }
+        },
+        "required": ["address", "type"]
+      }
+    },
+    {
+      "name": "clear_watchpoint",
+      "description": "Clear a watchpoint.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "integer" }
+        },
+        "required": ["address"]
+      }
+    },
+
+    {
+      "name": "show_config",
+      "description": "Show active MCP configuration.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "set_permissions",
+      "description": "Set security permissions.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "permissions": { "type": "string" }
+        },
+        "required": ["permissions"]
+      }
+    },
+    {
+      "name": "get_permissions",
+      "description": "Get active permissions.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+
+    {
+      "name": "run_command",
+      "description": "Run a raw OpenOCD command.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string" }
+        },
+        "required": ["command"]
+      }
     }
   ]
 }
