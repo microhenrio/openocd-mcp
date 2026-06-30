@@ -19,7 +19,7 @@ Claude can:
   (halt only when an expression is true) and hit-count breakpoints
 - **Watch memory** — hardware **watchpoints** that halt on read/write/access to an address
 - **Read variables by name** — from your firmware's `.elf` symbols (e.g. `read_variable uart_rx_count`)
-- **Live-watch variables** — sample one or more variables over time *without halting* the CPU
+- **Live-watch variables** — a window that samples variables over time *without halting* the CPU, with **expandable structs/arrays** auto-typed from DWARF (signed/float/pointer/enum)
 - **Read peripheral registers by name** — from a CMSIS-SVD file, decoded into named bitfields (e.g. `RCC.CR`, `GPIOA.MODER`)
 
 The server is **chip-agnostic** — it works with any target OpenOCD supports; you
@@ -160,14 +160,19 @@ openocd-watch tick_count sensor_value --elf path/to/firmware.elf
 openocd-watch tick_count sensor_value
 ```
 
-It samples the variables **without halting** the CPU and refreshes a table in a
-window. Add more entries in the box — each can be a **variable name** (`uwTick`)
-or a **hex address** with an optional size (`0x20000000`, `0x20000000:2`), so you
-can watch raw memory or peripheral registers too. A **Format** dropdown switches
-how values are shown — **Hex / Decimal / Signed / Float (f32) / Binary** — and
-re-renders instantly. Use `--interval` to change the poll rate, `--format` to set
-the initial format, or `--samples N` for a headless printout instead of a window.
-Requires Tkinter, which ships with standard Python.
+It samples the variables **without halting** the CPU and refreshes a tree in a
+window. Add more entries in the box — each is resolved automatically and can be:
+
+- a **variable name** (`uwTick`, `commsService`) → looked up in the ELF; if it's a
+  **struct, union, or array** it gets an expand triangle, and its members/elements
+  are shown **auto-typed from DWARF** (signed, float, pointer, enum, nested structs);
+- a **hex address** with optional size (`0x20000000`, `0x20000000:2`) → read directly.
+
+A **Format** dropdown switches how values are shown — **Auto (by C type) / Hex /
+Decimal / Signed / Float (f32) / Binary** — and re-renders instantly. Use
+`--interval` to change the poll rate, `--format` to set the initial format, or
+`--samples N` for a headless printout. Requires Tkinter (ships with standard Python)
+and a debug build (`-g`) for the type info.
 
 If OpenOCD isn't already running, add `--autostart` and the window launches it
 for you (and stops it on close) — fully standalone, no Claude or `.bat` needed:
