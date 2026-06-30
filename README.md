@@ -163,9 +163,11 @@ openocd-watch tick_count sensor_value
 It samples the variables **without halting** the CPU and refreshes a table in a
 window. Add more entries in the box — each can be a **variable name** (`uwTick`)
 or a **hex address** with an optional size (`0x20000000`, `0x20000000:2`), so you
-can watch raw memory or peripheral registers too. Use `--interval` to change the
-poll rate, or `--samples N` for a headless printout instead of a window. Requires
-Tkinter, which ships with standard Python.
+can watch raw memory or peripheral registers too. A **Format** dropdown switches
+how values are shown — **Hex / Decimal / Signed / Float (f32) / Binary** — and
+re-renders instantly. Use `--interval` to change the poll rate, `--format` to set
+the initial format, or `--samples N` for a headless printout instead of a window.
+Requires Tkinter, which ships with standard Python.
 
 If OpenOCD isn't already running, add `--autostart` and the window launches it
 for you (and stops it on close) — fully standalone, no Claude or `.bat` needed:

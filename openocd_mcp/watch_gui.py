@@ -17,6 +17,7 @@ server, `openocd-mcp install-openocd` + your usual flow, or start_openocd.bat).
 import argparse
 import atexit
 import re
+import struct
 
 from . import config
 from .launcher import OpenOCDLauncher
@@ -74,14 +75,36 @@ class VariableSampler:
         return addr, size, None
 
 
-def _fmt(size, value):
+# Display formats: key -> human label (label order drives the GUI dropdown).
+FORMATS = {
+    "hex": "Hex",
+    "dec": "Decimal",
+    "int": "Signed",
+    "float": "Float (f32)",
+    "bin": "Binary",
+}
+
+
+def format_value(value, size, fmt="hex") -> str:
+    """Render a raw integer value in the chosen format, given its byte size."""
     if value is None:
         return "-"
-    digits = (size or 4) * 2
-    return f"0x{value:0{digits}X} ({value})"
+    size = size or 4
+    bits = size * 8
+    if fmt == "dec":
+        return str(value)
+    if fmt == "int":  # two's-complement signed
+        return str(value - (1 << bits) if value >= (1 << (bits - 1)) else value)
+    if fmt == "float":
+        if size == 4:
+            return f"{struct.unpack('<f', value.to_bytes(4, 'little'))[0]:.6g}"
+        return "(needs 4 bytes)"
+    if fmt == "bin":
+        return f"0b{value:0{bits}b}"
+    return f"0x{value:0{size * 2}X}"  # hex (default)
 
 
-def _run_headless(sampler, names, interval_ms, samples):
+def _run_headless(sampler, names, interval_ms, samples, fmt="hex"):
     import time
     print("ms    | " + " | ".join(names))
     t0 = time.time()
@@ -89,27 +112,38 @@ def _run_headless(sampler, names, interval_ms, samples):
         cells = []
         for n in names:
             _, size, v = sampler.read(n)
-            cells.append(_fmt(size, v))
+            cells.append(format_value(v, size, fmt))
         print(f"{int((time.time()-t0)*1000):5d} | " + " | ".join(cells))
         if i < samples - 1:
             time.sleep(interval_ms / 1000.0)
 
 
-def _run_gui(sampler, names, interval_ms, host, port):
+def _run_gui(sampler, names, interval_ms, host, port, fmt="hex"):
     import tkinter as tk
     from tkinter import ttk
 
     root = tk.Tk()
     root.title(f"OpenOCD Live Watch — {host}:{port}")
-    root.geometry("560x360")
+    root.geometry("600x380")
+
+    # Top bar: display-format selector.
+    top = tk.Frame(root)
+    top.pack(fill="x", padx=8, pady=(8, 4))
+    tk.Label(top, text="Format:").pack(side="left")
+    labels = list(FORMATS.values())
+    keys = list(FORMATS.keys())
+    fmt_combo = ttk.Combobox(top, values=labels, state="readonly", width=14)
+    fmt_combo.current(keys.index(fmt) if fmt in keys else 0)
+    fmt_combo.pack(side="left", padx=6)
+    current = {"fmt": fmt}
 
     cols = ("variable", "address", "value")
     tree = ttk.Treeview(root, columns=cols, show="headings")
-    for c, w in (("variable", 200), ("address", 110), ("value", 230)):
+    for c, w in (("variable", 220), ("address", 110), ("value", 240)):
         tree.heading(c, text=c.capitalize())
         tree.column(c, width=w, anchor="w")
     tree.tag_configure("changed", background="#fff4c2")
-    tree.pack(fill="both", expand=True, padx=8, pady=(8, 4))
+    tree.pack(fill="both", expand=True, padx=8, pady=4)
 
     # Add-variable bar
     bar = tk.Frame(root)
@@ -131,8 +165,26 @@ def _run_gui(sampler, names, interval_ms, host, port):
     status.pack(fill="x", side="bottom")
 
     items: dict[str, str] = {}
+    raw: dict[str, tuple] = {}        # name -> (addr, size, value)
     prev: dict[str, int | None] = {}
     counter = {"n": 0}
+
+    def render(name, changed=False):
+        addr, size, value = raw[name]
+        addr_s = "not found" if addr is None else f"0x{addr:08X}"
+        val_s = "—" if addr is None else format_value(value, size, current["fmt"])
+        tags = ("changed",) if changed else ()
+        if name in items:
+            tree.item(items[name], values=(name, addr_s, val_s), tags=tags)
+        else:
+            items[name] = tree.insert("", "end", values=(name, addr_s, val_s), tags=tags)
+
+    def on_format(_=None):
+        current["fmt"] = keys[fmt_combo.current()]
+        for name in raw:           # re-render existing values in the new format
+            render(name)
+
+    fmt_combo.bind("<<ComboboxSelected>>", on_format)
 
     def refresh():
         for name in watched:
@@ -141,15 +193,10 @@ def _run_gui(sampler, names, interval_ms, host, port):
             except OpenOCDError as e:
                 status.config(text=f"connection lost: {e}")
                 return
-            addr_s = "not found" if addr is None else f"0x{addr:08X}"
-            val_s = "—" if addr is None else _fmt(size, value)
             changed = name in prev and prev[name] != value
             prev[name] = value
-            tags = ("changed",) if changed else ()
-            if name in items:
-                tree.item(items[name], values=(name, addr_s, val_s), tags=tags)
-            else:
-                items[name] = tree.insert("", "end", values=(name, addr_s, val_s), tags=tags)
+            raw[name] = (addr, size, value)
+            render(name, changed)
         counter["n"] += 1
         status.config(text=f"sample #{counter['n']}  ·  {len(watched)} variable(s)  ·  every {interval_ms} ms")
         root.after(interval_ms, refresh)
@@ -178,6 +225,8 @@ def main() -> None:
                    help="start OpenOCD if it isn't already running (uses the configured target)")
     p.add_argument("--target", default="", help="target cfg for --autostart, e.g. target/stm32g0x.cfg")
     p.add_argument("--interface", default="", help="interface cfg for --autostart, e.g. interface/stlink.cfg")
+    p.add_argument("--format", choices=list(FORMATS), default="hex",
+                   help="initial display format: " + ", ".join(FORMATS))
     args = p.parse_args()
 
     names = list(args.names) + [n for n in re.split(r"[,\s]+", args.vars.strip()) if n]
@@ -210,10 +259,10 @@ def main() -> None:
     print(f"Loaded {n} symbols from {elf}")
 
     if args.samples > 0:
-        _run_headless(sampler, names, args.interval, args.samples)
+        _run_headless(sampler, names, args.interval, args.samples, args.format)
         sampler.client.close()
     else:
-        _run_gui(sampler, names, args.interval, args.host, args.port)
+        _run_gui(sampler, names, args.interval, args.host, args.port, args.format)
 
 
 if __name__ == "__main__":
