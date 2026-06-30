@@ -2,15 +2,15 @@
 
 # OpenOCD MCP Server
 
-Debug microcontrollers directly from Claude. This is an [MCP](https://modelcontextprotocol.io)
-server that drives [OpenOCD](https://openocd.org/), letting Claude flash firmware,
-control execution, and inspect a running target — and read your variables and
-peripheral registers **by name** instead of raw addresses.
+Debug microcontrollers directly from your AI assistant. This is an [MCP](https://modelcontextprotocol.io)
+server that drives [OpenOCD](https://openocd.org/), letting any MCP-compatible AI
+flash firmware, control execution, and inspect a running target — and read your
+variables and peripheral registers **by name** instead of raw addresses.
 
 ## Description
 
 Once connected to a target through a debug probe (ST-Link, J-Link, CMSIS-DAP, …),
-Claude can:
+your AI assistant can:
 
 - **Flash firmware** — program and verify `.elf` / `.bin` / `.hex` images
 - **Control execution** — halt, resume, single-step, reset
@@ -28,10 +28,25 @@ point it at your chip's config and (optionally) SVD/ELF. It can also **start
 OpenOCD for you** and **download OpenOCD automatically** for your platform, so
 there's nothing else to install by hand.
 
+## Supported AI clients
+
+Any MCP-compatible client works. Tested and known to work:
+
+| Client | Platform |
+|---|---|
+| [Claude Code](https://claude.com/claude-code) | CLI / IDE |
+| [Claude Desktop](https://claude.ai/download) | macOS / Windows |
+| [Cursor](https://www.cursor.com/) | IDE |
+| [Windsurf](https://windsurf.ai/) | IDE |
+| [Cline](https://github.com/clinebot/cline) | VS Code extension |
+| [Continue](https://continue.dev/) | VS Code / JetBrains |
+| [Zed](https://zed.dev/) | Editor |
+| [VS Code + GitHub Copilot](https://code.visualstudio.com/) | IDE (agent mode) |
+| [Gemini CLI](https://github.com/google-gemini/gemini-cli) | CLI |
+
 ## Installation
 
-**Prerequisites:** Python 3.10+, [Claude Code](https://claude.com/claude-code),
-and a debug probe connected to your target.
+**Prerequisites:** Python 3.10+ and a debug probe connected to your target.
 
 Clone and install the package into a virtual environment:
 
@@ -51,8 +66,28 @@ Install it (creates the `openocd-mcp` command):
 .venv/bin/python -m pip install -e .
 ```
 
-Register the server with Claude Code (user scope makes it available in every
-project):
+> **Windows shortcut:** run `setup.bat` — it creates the environment, installs
+> the package, and registers it with Claude Code automatically.
+
+**OpenOCD** is obtained automatically: a build for your OS/architecture is
+downloaded and cached on first connect (checksum-verified). You can also fetch it
+ahead of time with `openocd-mcp install-openocd`, or use an existing install by
+setting the `OPENOCD_BIN` environment variable.
+
+### Registering with your AI client
+
+The server executable is:
+
+```
+# Windows
+<repo>\.venv\Scripts\openocd-mcp.exe
+
+# macOS / Linux
+<repo>/.venv/bin/openocd-mcp
+```
+
+<details>
+<summary><strong>Claude Code</strong></summary>
 
 ```bash
 # Windows
@@ -62,19 +97,114 @@ claude mcp add --scope user openocd -- "%CD%\.venv\Scripts\openocd-mcp.exe"
 claude mcp add --scope user openocd -- "$PWD/.venv/bin/openocd-mcp"
 ```
 
-> **Windows shortcut:** instead of the steps above you can just run `setup.bat`,
-> which creates the environment, installs the package, and registers it.
+Restart Claude Code, then verify with `claude mcp list`.
+</details>
 
-Then **restart Claude Code** so it loads the server. Verify with:
+<details>
+<summary><strong>Claude Desktop</strong></summary>
 
-```bash
-claude mcp list      # openocd: ... ✓ Connected
+Add to `claude_desktop_config.json` (Edit → Settings → Developer → Edit Config):
+
+```json
+{
+  "mcpServers": {
+    "openocd": {
+      "command": "/path/to/.venv/bin/openocd-mcp"
+    }
+  }
+}
 ```
 
-**OpenOCD** is obtained automatically: a build for your OS/architecture is
-downloaded and cached on first connect (checksum-verified). You can also fetch it
-ahead of time with `openocd-mcp install-openocd`, or use an existing install by
-setting the `OPENOCD_BIN` environment variable.
+Restart Claude Desktop.
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Add to `~/.cursor/mcp.json` (or `.cursor/mcp.json` in your project):
+
+```json
+{
+  "mcpServers": {
+    "openocd": {
+      "command": "/path/to/.venv/bin/openocd-mcp"
+    }
+  }
+}
+```
+
+Restart Cursor.
+</details>
+
+<details>
+<summary><strong>Windsurf</strong></summary>
+
+Add to `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "openocd": {
+      "command": "/path/to/.venv/bin/openocd-mcp"
+    }
+  }
+}
+```
+
+Restart Windsurf.
+</details>
+
+<details>
+<summary><strong>Cline (VS Code)</strong></summary>
+
+Open the Cline panel → MCP Servers → Add Server → Manual, then enter:
+
+```json
+{
+  "openocd": {
+    "command": "/path/to/.venv/bin/openocd-mcp"
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><strong>Continue (VS Code / JetBrains)</strong></summary>
+
+Add to `~/.continue/config.json`:
+
+```json
+{
+  "mcpServers": [
+    {
+      "name": "openocd",
+      "command": "/path/to/.venv/bin/openocd-mcp"
+    }
+  ]
+}
+```
+
+</details>
+
+<details>
+<summary><strong>VS Code + GitHub Copilot</strong></summary>
+
+Add to `.vscode/mcp.json` in your workspace (or user `settings.json`):
+
+```json
+{
+  "servers": {
+    "openocd": {
+      "type": "stdio",
+      "command": "/path/to/.venv/bin/openocd-mcp"
+    }
+  }
+}
+```
+
+Enable via **Chat → Agent mode** in VS Code.
+</details>
 
 ## How to work with it
 
@@ -100,15 +230,17 @@ Each firmware project tells the server which target it's debugging. Create an
 - `elf_file` — your firmware build output (enables variables by name).
 
 > **J-Link on Windows:** OpenOCD reaches J-Links via libusb, so bind the J-Link's
-> debug interface to **WinUSB** with [Zadig](https://zadig.akeo.ie/) once (this
-> disables SEGGER's own tools until reverted). ST-Link works without that step.
+> debug interface to **libusbK** (or WinUSB) with [Zadig](https://zadig.akeo.ie/)
+> once (Interface 2 / MI_02). Newer SEGGER software (v7.x+) is compatible with
+> libusbK, so both OpenOCD and SEGGER tools can coexist. ST-Link works without
+> that step.
 
-Or simply tell Claude the chip you're using and it will configure the session for
+Or simply tell the AI the chip you're using and it will configure the session for
 you. `show_config` reports the active settings at any time.
 
-### 2. Talk to Claude
+### 2. Describe what you want
 
-With the board plugged in, describe what you want — Claude picks the right tools:
+With the board plugged in, describe what you want — the AI picks the right tools:
 
 | You say… | What happens |
 |---|---|
@@ -126,7 +258,7 @@ With the board plugged in, describe what you want — Claude picks the right too
 | "flash `build/firmware.elf` and run it" | Programs, verifies, and restarts |
 | "dump 64 bytes of RAM at `0x20000000`" | Reads memory |
 
-You don't call tools by name — describe the goal and Claude maps it to the
+You don't call tools by name — describe the goal and the AI maps it to the
 underlying tools.
 
 ### 3. Conditional breakpoints & watchpoints
@@ -138,7 +270,7 @@ can use two helpers:
 - `get_reg <name>` — a CPU register value (e.g. `get_reg r0`, `get_reg pc`)
 - `get_mem <addr> [width]` — a memory value (e.g. `get_mem 0x20000000`)
 
-Just describe the intent to Claude; it builds the condition:
+Just describe the intent; the AI builds the condition:
 
 | You say… | Condition used |
 |---|---|
@@ -158,8 +290,8 @@ what corrupts a variable:
 ### A live-watch window
 
 For a continuously-updating view of variable values, run the bundled GUI. It's a
-standalone app (separate from Claude) that opens its own connection to OpenOCD,
-so it works fine while a Claude session is driving the same target:
+standalone app that opens its own connection to OpenOCD, so it works fine alongside
+any AI session driving the same target:
 
 ```bash
 openocd-watch tick_count sensor_value --elf path/to/firmware.elf
@@ -184,13 +316,13 @@ Decimal / Signed / Float (f32) / Binary** — and re-renders instantly. Use
 and a debug build (`-g`) for the type info.
 
 If OpenOCD isn't already running, add `--autostart` and the window launches it
-for you (and stops it on close) — fully standalone, no Claude or `.bat` needed:
+for you (and stops it on close) — fully standalone, no AI client or `.bat` needed:
 
 ```bash
 openocd-watch uwTick xTickCount --elf path/to/firmware.elf --autostart --target target/stm32g0x.cfg
 ```
 
-> The target must be **halted** to read registers, memory, or variables — Claude
+> The target must be **halted** to read registers, memory, or variables — the AI
 > halts first when needed. The first `connect` of a session starts OpenOCD
 > automatically.
 
@@ -213,7 +345,7 @@ raw-command escape hatch.
 Set them three ways (later wins):
 
 1. A **`permissions`** object in `openocd-mcp.json` (see `openocd-mcp.example.json`).
-2. The **`set_permissions`** tool at runtime — e.g. ask Claude to "make the target
+2. The **`set_permissions`** tool at runtime — e.g. ask the AI to "make the target
    read-only" or "allow flash erase for this session".
 3. The **`OPENOCD_MCP_READONLY=1`** environment variable (forces read-only).
 
