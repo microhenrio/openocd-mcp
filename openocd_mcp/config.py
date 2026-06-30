@@ -79,6 +79,19 @@ _DEFAULTS = {
 
 PROJECT_CONFIG_NAME = "openocd-mcp.json"
 
+# Safety/permission defaults. Override via a "permissions" object in
+# openocd-mcp.json, the set_permissions tool, or OPENOCD_MCP_READONLY=1.
+# read_only is a master switch that blocks every mutating operation.
+_PERM_DEFAULTS = {
+    "read_only": False,          # master: block all writes/flash/erase/raw
+    "allow_memory_write": True,  # write_memory / write_variable / write_register / write_peripheral_register
+    "allow_flash": True,         # flash_write (program)
+    "allow_flash_erase": False,  # flash_erase_sector (destructive — opt in)
+    "allow_raw_command": True,   # run_command escape hatch
+    "flash_allowed_paths": [],   # if set, flash files must live under one of these dirs
+    "flash_max_bytes": 0,        # if > 0, reject flashing files larger than this
+}
+
 
 def _load_project_file() -> tuple[dict, str | None]:
     """Find and read a per-project config file, if any."""
@@ -119,6 +132,51 @@ class Settings:
         return dict(self.values)
 
 
+class Permissions:
+    """Safety gates for mutating operations, layered over safe defaults."""
+
+    def __init__(self):
+        self.values = dict(_PERM_DEFAULTS)
+        path = os.environ.get("OPENOCD_MCP_CONFIG") or os.path.join(
+            os.getcwd(), PROJECT_CONFIG_NAME
+        )
+        if path and os.path.isfile(path):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    perms = json.load(f).get("permissions", {})
+                for k, v in perms.items():
+                    if k in self.values:
+                        self.values[k] = v
+            except (OSError, json.JSONDecodeError):
+                pass
+        if os.environ.get("OPENOCD_MCP_READONLY"):
+            self.values["read_only"] = True
+
+    def get(self, key):
+        return self.values.get(key)
+
+    def update(self, **kw) -> None:
+        for k, v in kw.items():
+            if k in self.values and v is not None:
+                self.values[k] = v
+
+    def as_dict(self) -> dict:
+        return dict(self.values)
+
+    # -- gate checks (return True if the op is allowed) --
+    def can_write_memory(self) -> bool:
+        return not self.values["read_only"] and self.values["allow_memory_write"]
+
+    def can_flash(self) -> bool:
+        return not self.values["read_only"] and self.values["allow_flash"]
+
+    def can_erase(self) -> bool:
+        return not self.values["read_only"] and self.values["allow_flash_erase"]
+
+    def can_raw(self) -> bool:
+        return not self.values["read_only"] and self.values["allow_raw_command"]
+
+
 def resolve_path(path: str) -> str:
     """Resolve a possibly-relative svd/elf path against the project directory,
     so a config like {"svd_file": "svd/STM32G0B0.svd"} works no matter where the
@@ -128,5 +186,6 @@ def resolve_path(path: str) -> str:
     return os.path.join(_REPO_DIR, path)
 
 
-# Single shared settings object the server reads from.
+# Shared singletons the server reads from.
 settings = Settings()
+permissions = Permissions()

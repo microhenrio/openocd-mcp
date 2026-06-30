@@ -7,6 +7,7 @@ Claude calls these tools to inspect and debug a microcontroller target through
 OpenOCD (which the server can start itself).
 """
 import atexit
+import os
 import re
 import time
 
@@ -107,6 +108,34 @@ def _ensure_svd() -> str:
             return f"ERROR: could not load SVD ({svd}): {e}"
     return ""
 
+
+def _denied(op: str, hint: str) -> str:
+    """Standard message when a safety gate blocks a mutating operation."""
+    return (f"BLOCKED: '{op}' is not permitted by the current safety settings "
+            f"({'read-only mode' if config.permissions.get('read_only') else 'disabled'}). "
+            f"{hint} See show_config / set_permissions.")
+
+
+def _check_flash_file(path: str) -> str:
+    """Enforce the flash file path allowlist and size cap. '' if OK, else error."""
+    allowed = config.permissions.get("flash_allowed_paths") or []
+    max_bytes = config.permissions.get("flash_max_bytes") or 0
+    real = os.path.realpath(path)
+    if allowed:
+        roots = [os.path.realpath(p) for p in allowed]
+        if not any(real.lower().startswith(r.lower()) for r in roots):
+            return (f"BLOCKED: '{path}' is outside the allowed flash paths "
+                    f"({', '.join(allowed)}). Adjust flash_allowed_paths.")
+    if max_bytes:
+        try:
+            size = os.path.getsize(real)
+        except OSError:
+            return f"ERROR: cannot stat flash file '{path}'."
+        if size > max_bytes:
+            return f"BLOCKED: flash file is {size} bytes, over the flash_max_bytes={max_bytes} limit."
+    return ""
+
+
 # Make sure we don't leave an orphaned OpenOCD running when the server exits.
 atexit.register(_launcher.stop)
 
@@ -158,7 +187,44 @@ def show_config() -> str:
     binp, _ = config.openocd_paths()
     lines.append(f"  openocd_bin: {binp or '(not found — call install_openocd)'}")
     lines.append(f"  port: {config.HOST}:{config.PORT}")
+    lines.append("permissions:")
+    for k, v in config.permissions.as_dict().items():
+        lines.append(f"  {k}: {v if v not in ([], 0) else (v if k != 'flash_allowed_paths' else '(any)')}")
     return "\n".join(lines)
+
+
+@mcp.tool()
+def set_permissions(
+    read_only: bool | None = None,
+    allow_memory_write: bool | None = None,
+    allow_flash: bool | None = None,
+    allow_flash_erase: bool | None = None,
+    allow_raw_command: bool | None = None,
+    flash_max_bytes: int | None = None,
+) -> str:
+    """
+    Adjust safety permissions for this session (only provided args change).
+
+    read_only          : master switch — blocks all writes/flash/erase/raw
+    allow_memory_write : write_memory / write_variable / write_register / write_peripheral_register
+    allow_flash        : flash_write (program)
+    allow_flash_erase  : flash_erase_sector (destructive; off by default)
+    allow_raw_command  : run_command escape hatch
+    flash_max_bytes    : reject flashing files larger than this (0 = no limit)
+
+    For persistent settings, put a "permissions" object in openocd-mcp.json.
+    (flash_allowed_paths is set there, not here.)
+    """
+    updates = {k: v for k, v in {
+        "read_only": read_only,
+        "allow_memory_write": allow_memory_write,
+        "allow_flash": allow_flash,
+        "allow_flash_erase": allow_flash_erase,
+        "allow_raw_command": allow_raw_command,
+        "flash_max_bytes": flash_max_bytes,
+    }.items() if v is not None}
+    config.permissions.update(**updates)
+    return "Permissions updated.\n" + show_config()
 
 
 @mcp.tool()
@@ -329,6 +395,8 @@ def write_register(name: str, value: str) -> str:
     Write a value to a CPU register.
     value: hex string, e.g. '0x20001000'
     """
+    if not config.permissions.can_write_memory():
+        return _denied("write_register", "Enable allow_memory_write and clear read_only.")
     return _client.send_command(f"reg {name} {value}")
 
 
@@ -358,6 +426,8 @@ def write_memory(address: str, value: str, width: int = 32) -> str:
     value   : hex value,   e.g. '0xDEADBEEF'
     width   : 8, 16, or 32
     """
+    if not config.permissions.can_write_memory():
+        return _denied("write_memory", "Enable allow_memory_write and clear read_only.")
     cmd_map = {8: "mwb", 16: "mwh", 32: "mww"}
     if width not in cmd_map:
         return "ERROR: width must be 8, 16, or 32"
@@ -495,6 +565,11 @@ def flash_write(path: str, verify: bool = True, reset_after: bool = True) -> str
     verify      : read back and verify after programming (recommended)
     reset_after : reset and run the new firmware after flashing
     """
+    if not config.permissions.can_flash():
+        return _denied("flash_write", "Enable allow_flash and clear read_only.")
+    err = _check_flash_file(path)
+    if err:
+        return err
     parts = ["program", path]
     if verify:
         parts.append("verify")
@@ -517,6 +592,8 @@ def flash_erase_sector(bank: int, first: int, last: int) -> str:
     first : first sector number to erase
     last  : last sector number to erase (inclusive)
     """
+    if not config.permissions.can_erase():
+        return _denied("flash_erase_sector", "Enable allow_flash_erase and clear read_only.")
     return _client.send_command(f"flash erase_sector {bank} {first} {last}")
 
 
@@ -575,6 +652,8 @@ def write_variable(name: str, value: str) -> str:
     Write a scalar global/static variable by name (requires load_elf first).
     value: hex (e.g. '0x2A') or decimal. Use write_memory for arrays/structs.
     """
+    if not config.permissions.can_write_memory():
+        return _denied("write_variable", "Enable allow_memory_write and clear read_only.")
     info = _symbols.lookup(name)
     if not info:
         return f"ERROR: variable '{name}' not found (load_elf first?)."
@@ -702,6 +781,8 @@ def read_peripheral_register(name: str) -> str:
 @mcp.tool()
 def write_peripheral_register(name: str, value: str) -> str:
     """Write a 32-bit value to a peripheral register by name (e.g. 'GPIOA.ODR')."""
+    if not config.permissions.can_write_memory():
+        return _denied("write_peripheral_register", "Enable allow_memory_write and clear read_only.")
     err = _ensure_svd()
     if err:
         return err
@@ -738,6 +819,9 @@ def run_command(command: str) -> str:
     Run any raw OpenOCD TCL command and return its output.
     Use this for anything not covered by the other tools.
     """
+    if not config.permissions.can_raw():
+        return _denied("run_command", "Enable allow_raw_command and clear read_only "
+                       "(it's gated because raw commands can bypass the other limits).")
     return _client.send_command(command)
 
 

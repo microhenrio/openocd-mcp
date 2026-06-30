@@ -3,5 +3,16 @@
   "interface_cfg": "interface/stlink.cfg",
   "target_cfg": "target/stm32g0x.cfg",
   "svd_file": "svd/STM32G0B0.svd",
-  "elf_file": "C:\\path\\to\\your\\build\\firmware.elf"
+  "elf_file": "C:\\path\\to\\your\\build\\firmware.elf",
+
+  "_permissions_comment": "Optional safety gates. Omit the whole block to use defaults (writes + flash allowed, flash-erase OFF). read_only=true blocks every mutating op.",
+  "permissions": {
+    "read_only": false,
+    "allow_memory_write": true,
+    "allow_flash": true,
+    "allow_flash_erase": false,
+    "allow_raw_command": true,
+    "flash_allowed_paths": [],
+    "flash_max_bytes": 0
+  }
 }

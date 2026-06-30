@@ -21,6 +21,7 @@ Claude can:
 - **Read variables by name** — from your firmware's `.elf` symbols (e.g. `read_variable uart_rx_count`)
 - **Live-watch variables** — a window that samples variables over time *without halting* the CPU, with **expandable structs/arrays** auto-typed from DWARF (signed/float/pointer/enum)
 - **Read peripheral registers by name** — from a CMSIS-SVD file, decoded into named bitfields (e.g. `RCC.CR`, `GPIOA.MODER`)
+- **Safety gates** — permission layer (read-only mode, gated flash-erase, flash path/size limits) so the agent can't damage a target unexpectedly
 
 The server is **chip-agnostic** — it works with any target OpenOCD supports; you
 point it at your chip's config and (optionally) SVD/ELF. It can also **start
@@ -186,3 +187,29 @@ openocd-watch uwTick xTickCount --elf path/to/firmware.elf --autostart --target 
 > The target must be **halted** to read registers, memory, or variables — Claude
 > halts first when needed. The first `connect` of a session starts OpenOCD
 > automatically.
+
+## Safety / permissions
+
+Mutating operations are gated so the agent can't damage a target unexpectedly.
+Reads are always allowed; the gates apply to writes, flashing, erasing, and the
+raw-command escape hatch.
+
+| Permission | Default | Gates |
+|---|---|---|
+| `read_only` | `false` | master switch — blocks **all** writes/flash/erase/raw |
+| `allow_memory_write` | `true` | `write_memory`, `write_variable`, `write_register`, `write_peripheral_register` |
+| `allow_flash` | `true` | `flash_write` (program) |
+| `allow_flash_erase` | **`false`** | `flash_erase_sector` (destructive — opt in) |
+| `allow_raw_command` | `true` | `run_command` (can bypass other limits) |
+| `flash_allowed_paths` | `[]` (any) | restrict `flash_write` to files under these dirs |
+| `flash_max_bytes` | `0` (no limit) | reject flashing files larger than this |
+
+Set them three ways (later wins):
+
+1. A **`permissions`** object in `openocd-mcp.json` (see `openocd-mcp.example.json`).
+2. The **`set_permissions`** tool at runtime — e.g. ask Claude to "make the target
+   read-only" or "allow flash erase for this session".
+3. The **`OPENOCD_MCP_READONLY=1`** environment variable (forces read-only).
+
+A blocked call returns a clear `BLOCKED: …` message explaining which permission to
+enable. `show_config` lists the active permissions.
