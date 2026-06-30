@@ -322,9 +322,10 @@ for you (and stops it on close) — fully standalone, no AI client or `.bat` nee
 openocd-watch uwTick xTickCount --elf path/to/firmware.elf --autostart --target target/stm32g0x.cfg
 ```
 
-> The target must be **halted** to read registers, memory, or variables — the AI
-> halts first when needed. The first `connect` of a session starts OpenOCD
-> automatically.
+> **CPU core registers** (`r0`, `pc`, `sp`, …) require the target to be halted —
+> the AI halts first when needed. Memory, variables, and peripheral registers are
+> memory-mapped and can be read while the CPU is running (as the live-watch window
+> does). The first `connect` of a session starts OpenOCD automatically.
 
 ## Safety / permissions
 
