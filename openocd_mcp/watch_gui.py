@@ -201,8 +201,23 @@ def _run_gui(sampler, names, interval_ms, host, port, fmt="auto"):
             watched.append(name)
             entry.delete(0, "end")
 
+    def remove_selected(_=None):
+        for sel in tree.selection():
+            top = sel
+            while tree.parent(top):          # a struct member -> remove its whole variable
+                top = tree.parent(top)
+            if top in watched:
+                watched.remove(top)
+            if tree.exists(top):
+                tree.delete(top)
+            for d in (prev, last):           # purge cached state for the subtree
+                for k in [k for k in d if k == top or k.startswith(top + "/")]:
+                    d.pop(k, None)
+
     tk.Button(bar, text="Add", command=add_var).pack(side="left", padx=4)
+    tk.Button(bar, text="Remove", command=remove_selected).pack(side="left")
     entry.bind("<Return>", add_var)
+    tree.bind("<Delete>", remove_selected)
 
     status = tk.Label(root, anchor="w", relief="sunken")
     status.pack(fill="x", side="bottom")
