@@ -161,7 +161,9 @@ openocd-watch tick_count sensor_value
 ```
 
 It samples the variables **without halting** the CPU and refreshes a tree in a
-window. Add more entries in the box — each is resolved automatically and can be:
+window. Add entries with the box (press Enter or **Add**) and remove a selected
+row with **Remove** (or the Delete key). Each entry is resolved automatically and
+can be:
 
 - a **variable name** (`uwTick`, `commsService`) → looked up in the ELF; if it's a
   **struct, union, or array** it gets an expand triangle, and its members/elements
