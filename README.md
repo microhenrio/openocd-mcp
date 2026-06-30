@@ -161,7 +161,9 @@ openocd-watch tick_count sensor_value
 ```
 
 It samples the variables **without halting** the CPU and refreshes a table in a
-window (add more names in the window's entry box). Use `--interval` to change the
+window. Add more entries in the box — each can be a **variable name** (`uwTick`)
+or a **hex address** with an optional size (`0x20000000`, `0x20000000:2`), so you
+can watch raw memory or peripheral registers too. Use `--interval` to change the
 poll rate, or `--samples N` for a headless printout instead of a window. Requires
 Tkinter, which ships with standard Python.
 

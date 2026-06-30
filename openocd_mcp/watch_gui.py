@@ -25,9 +25,20 @@ from .symbols import SymbolTable
 
 _WIDTH_CMD = {1: "mdb", 2: "mdh", 4: "mdw"}
 
+# A hex address, optionally with a byte-size suffix: 0x20000000 or 0x20000000:2
+_HEX_RE = re.compile(r"^(0x[0-9a-fA-F]+)(?::([124]))?$")
+
+
+def _as_address(token: str) -> tuple[int, int] | None:
+    """If token is a hex address (opt. ':size'), return (address, size) else None."""
+    m = _HEX_RE.match(token.strip())
+    if not m:
+        return None
+    return int(m.group(1), 16), int(m.group(2)) if m.group(2) else 4
+
 
 class VariableSampler:
-    """Resolves variable names to addresses and reads them live (no halt)."""
+    """Resolves variable names (or hex addresses) and reads them live (no halt)."""
 
     def __init__(self, host: str, port: int):
         self.client = OpenOCDClient(host, port)
@@ -40,11 +51,16 @@ class VariableSampler:
         return self.symbols.load(path)
 
     def read(self, name: str) -> tuple[int | None, int | None, int | None]:
-        """Return (address, size, value); value/None. address None if unknown."""
-        info = self.symbols.lookup(name)
-        if not info:
-            return None, None, None
-        addr, size = info
+        """Return (address, size, value); value/None. address None if unknown.
+        `name` may be an ELF symbol name or a hex address like 0x20000000[:size]."""
+        addr_size = _as_address(name)
+        if addr_size:
+            addr, size = addr_size
+        else:
+            info = self.symbols.lookup(name)
+            if not info:
+                return None, None, None
+            addr, size = info
         cmd = _WIDTH_CMD.get(size, "mdw")
         resp = self.client.send_command(f"{cmd} {hex(addr)} 1")
         for line in resp.splitlines():
@@ -151,8 +167,8 @@ def _run_gui(sampler, names, interval_ms, host, port):
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Live-watch target variables in a window.")
-    p.add_argument("names", nargs="*", help="variable names to watch")
-    p.add_argument("--vars", default="", help="comma/space-separated names (added to positional)")
+    p.add_argument("names", nargs="*", help="variable names or hex addresses (0x...[:size]) to watch")
+    p.add_argument("--vars", default="", help="comma/space-separated names/addresses (added to positional)")
     p.add_argument("--elf", default="", help="firmware .elf (default: configured elf_file)")
     p.add_argument("--interval", type=int, default=200, help="poll interval in ms")
     p.add_argument("--host", default=config.HOST)
