@@ -1,4 +1,22 @@
 <!-- mcp-name: io.github.microhenrio/openocd-mcp -->
+<p align="center">
+  <!-- Estado del repositorio -->
+  <img src="https://img.shields.io/github/last-commit/microhenrio/openocd-mcp" alt="Last Commit" />
+  <img src="https://img.shields.io/github/license/microhenrio/openocd-mcp" alt="License" />
+
+  <!-- Compatibilidad MCP -->
+  <img src="https://img.shields.io/badge/MCP-Server-blue" alt="MCP Server" />
+  <img src="https://img.shields.io/badge/AI-Ready-purple" alt="AI Ready" />
+
+  <!-- Compatibilidad con uvx -->
+  <img src="https://img.shields.io/badge/uvx-compatible-green" alt="uvx compatible" />
+
+  <!-- Badges que funcionarán cuando publiques en PyPI -->
+  <img src="https://img.shields.io/pypi/v/openocd-mcp" alt="PyPI Version" />
+  <img src="https://img.shields.io/pypi/dm/openocd-mcp" alt="PyPI Downloads" />
+  <img src="https://img.shields.io/pypi/pyversions/openocd-mcp" alt="Python Versions" />
+</p>
+
 
 # OpenOCD MCP Server
 
