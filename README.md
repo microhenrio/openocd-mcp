@@ -94,8 +94,14 @@ Each firmware project tells the server which target it's debugging. Create an
 
 - `target_cfg` / `interface_cfg` — OpenOCD configs (relative to its scripts dir).
   Defaults to an ST-Link probe; set `target_cfg` for your chip.
+- `transport` — `"swd"` or `"jtag"`. Set `"swd"` for a **J-Link** on Cortex-M
+  (with `interface_cfg: "interface/jlink.cfg"`); leave empty for ST-Link.
 - `svd_file` — CMSIS-SVD file for the chip (enables peripheral registers by name).
 - `elf_file` — your firmware build output (enables variables by name).
+
+> **J-Link on Windows:** OpenOCD reaches J-Links via libusb, so bind the J-Link's
+> debug interface to **WinUSB** with [Zadig](https://zadig.akeo.ie/) once (this
+> disables SEGGER's own tools until reverted). ST-Link works without that step.
 
 Or simply tell Claude the chip you're using and it will configure the session for
 you. `show_config` reports the active settings at any time.

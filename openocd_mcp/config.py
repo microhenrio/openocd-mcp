@@ -73,6 +73,7 @@ PORT = 6666
 _DEFAULTS = {
     "interface_cfg": "interface/stlink.cfg",
     "target_cfg": "",   # e.g. "target/stm32g0x.cfg"
+    "transport": "",    # e.g. "swd" — needed for J-Link on Cortex-M (else it picks JTAG)
     "svd_file": "",     # e.g. r"...\SVD\STM32G0B0.svd"
     "elf_file": "",     # e.g. r"...\build\firmware.elf"
 }

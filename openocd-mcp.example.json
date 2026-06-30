@@ -2,6 +2,8 @@
   "_comment": "Copy this to 'openocd-mcp.json' in your project root and edit. The server auto-loads it. interface_cfg/target_cfg are relative to OpenOCD's scripts dir. svd_file/elf_file may be absolute, or relative to the MCP project dir (e.g. a file under ./svd). elf_file is usually an absolute path into your firmware's build output.",
   "interface_cfg": "interface/stlink.cfg",
   "target_cfg": "target/stm32g0x.cfg",
+  "_transport_comment": "Set to 'swd' for a J-Link on Cortex-M (with interface_cfg 'interface/jlink.cfg'); leave empty for ST-Link.",
+  "transport": "",
   "svd_file": "svd/STM32G0B0.svd",
   "elf_file": "C:\\path\\to\\your\\build\\firmware.elf",
 

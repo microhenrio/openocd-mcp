@@ -22,6 +22,7 @@ class OpenOCDLauncher:
         scripts: str = "",
         interface_cfg: str = "",
         target_cfg: str = "",
+        transport: str = "",
         host: str = config.HOST,
         port: int = config.PORT,
     ):
@@ -30,6 +31,7 @@ class OpenOCDLauncher:
         self.scripts = scripts
         self.interface_cfg = interface_cfg
         self.target_cfg = target_cfg
+        self.transport = transport
         self.host = host
         self.port = port
         self._proc: subprocess.Popen | None = None
@@ -95,10 +97,14 @@ class OpenOCDLauncher:
                 "openocd-mcp.json, or pass target_cfg to start_openocd."
             )
 
+        transport = self.transport or config.settings.get("transport")
         cmd = [binary]
         if scripts:  # bundled/explicit scripts dir; omit to let OpenOCD find its own
             cmd += ["-s", scripts]
-        cmd += ["-f", interface_cfg, "-f", target_cfg]
+        cmd += ["-f", interface_cfg]
+        if transport:  # must come after the interface, before the target
+            cmd += ["-c", f"transport select {transport}"]
+        cmd += ["-f", target_cfg]
         try:
             self._proc = subprocess.Popen(
                 cmd,

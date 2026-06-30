@@ -148,6 +148,7 @@ atexit.register(_launcher.stop)
 def configure(
     interface_cfg: str = "",
     target_cfg: str = "",
+    transport: str = "",
     svd_file: str = "",
     elf_file: str = "",
 ) -> str:
@@ -155,8 +156,9 @@ def configure(
     Set the chip/project settings for this session. Only non-empty arguments are
     applied; the rest keep their current values.
 
-    interface_cfg : debug-probe OpenOCD config, e.g. 'interface/stlink.cfg'
+    interface_cfg : debug-probe OpenOCD config, e.g. 'interface/stlink.cfg' or 'interface/jlink.cfg'
     target_cfg    : chip OpenOCD config, e.g. 'target/stm32g0x.cfg'
+    transport     : 'swd' or 'jtag' — set 'swd' for J-Link on Cortex-M (else it picks JTAG)
     svd_file      : path to the chip's CMSIS-SVD file (peripheral registers)
     elf_file      : path to the firmware .elf (variables by name)
 
@@ -166,6 +168,7 @@ def configure(
     config.settings.update(
         interface_cfg=interface_cfg,
         target_cfg=target_cfg,
+        transport=transport,
         svd_file=svd_file,
         elf_file=elf_file,
     )
