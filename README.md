@@ -148,6 +148,23 @@ what corrupts a variable:
 - "watch for writes to `0x20000000`"
 - "watch address `0x20000010` for any read or write"
 
+### A live-watch window
+
+For a continuously-updating view of variable values, run the bundled GUI. It's a
+standalone app (separate from Claude) that opens its own connection to OpenOCD,
+so it works fine while a Claude session is driving the same target:
+
+```bash
+openocd-watch tick_count sensor_value --elf path/to/firmware.elf
+# or, if elf_file is set in openocd-mcp.json:
+openocd-watch tick_count sensor_value
+```
+
+It samples the variables **without halting** the CPU and refreshes a table in a
+window (add more names in the window's entry box). Use `--interval` to change the
+poll rate, or `--samples N` for a headless printout instead of a window. Requires
+Tkinter, which ships with standard Python.
+
 > The target must be **halted** to read registers, memory, or variables — Claude
 > halts first when needed. The first `connect` of a session starts OpenOCD
 > automatically.

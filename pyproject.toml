@@ -24,6 +24,7 @@ dependencies = [
 
 [project.scripts]
 openocd-mcp = "openocd_mcp.server:main"
+openocd-watch = "openocd_mcp.watch_gui:main"
 
 [project.urls]
 Homepage = "https://github.com/microhenrio/openocd-mcp"
