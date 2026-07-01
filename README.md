@@ -224,6 +224,33 @@ Add to `.vscode/mcp.json` in your workspace (or user `settings.json`):
 Enable via **Chat → Agent mode** in VS Code.
 </details>
 
+### Updating
+
+There's no self-update tool exposed over MCP — updating means running commands in
+a terminal, either yourself or by asking an AI that has shell access (e.g. Claude
+Code). **After updating, restart your AI client** so it loads the new server;
+if it was mid-session, it may need to stop the old `openocd-mcp` process first
+(a file lock can block the reinstall while it's running).
+
+**PyPI install** (`pip install openocd-mcp` or `uvx`):
+
+```bash
+pip install -U openocd-mcp
+
+# uvx caches by default — force a refresh:
+uvx --refresh openocd-mcp
+```
+
+**Editable git-clone install** (what `setup.bat` / this repo's instructions set up):
+
+```bash
+git pull
+# only needed if dependencies changed:
+.venv/bin/python -m pip install -e .   # or .venv\Scripts\python on Windows
+```
+
+Check the installed version with `pip show openocd-mcp`.
+
 ## How to work with it
 
 ### 1. Point it at your chip
