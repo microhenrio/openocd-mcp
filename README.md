@@ -266,7 +266,7 @@ With the board plugged in, describe what you want — the AI picks the right too
 | "what's the status?" | Reports running/halted and the current program counter |
 | "read the variable `sensor_value`" | Looks it up in the `.elf` and reads it off the chip |
 | "set `motor_enabled` to 1" | Writes the variable by name |
-| "watch `tick_count` live for 2 seconds" | Samples it repeatedly *without halting* and shows the values over time |
+| "watch `tick_count` live for 2 seconds" | Calls `watch_variables` — samples it repeatedly *without halting* and returns a table of values over time, right in the chat |
 | "read `GPIOA.MODER`" | Reads the register and decodes its named bitfields |
 | "list the `RCC` registers" | Lists registers from the SVD |
 | "break at `0x08001234`, then reset and run" | Sets a breakpoint and resets |
@@ -305,11 +305,26 @@ what corrupts a variable:
 - "watch for writes to `0x20000000`"
 - "watch address `0x20000010` for any read or write"
 
-### A live-watch window
+### Live-watching variables
 
-For a continuously-updating view of variable values, run the bundled GUI. It's a
-standalone app that opens its own connection to OpenOCD, so it works fine alongside
-any AI session driving the same target:
+There are **two separate ways** to watch a variable without halting the CPU —
+one the AI can trigger, one you run yourself:
+
+| | `watch_variables` (MCP tool) | `openocd-watch` (standalone GUI) |
+|---|---|---|
+| Triggered by | Asking the AI in chat | Running the command yourself in a terminal |
+| Output | A text table of samples returned to the chat | A live-updating window with a tree view |
+| Duration | One-shot: N samples, then it returns | Keeps running until you close it |
+| Structs/arrays | Flat values only | Expandable, DWARF-typed |
+
+**Ask the AI** for a quick, bounded look at a value over time — "watch `tick_count`
+for 10 samples", "sample `sensor_value` every 200ms for 2 seconds". This calls the
+`watch_variables` tool directly; no extra setup needed beyond an ELF loaded.
+
+**Run the GUI yourself** for an open-ended live view, especially of structs/arrays.
+It's a standalone app that opens its own connection to OpenOCD, so it works fine
+alongside any AI session driving the same target — but it is *not* an MCP tool, so
+the AI cannot open it for you; run it directly:
 
 ```bash
 openocd-watch tick_count sensor_value --elf path/to/firmware.elf
