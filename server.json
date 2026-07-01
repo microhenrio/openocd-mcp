@@ -3,7 +3,7 @@
   "name": "io.github.microhenrio/openocd-mcp",
   "title": "OpenOCD Debugger",
   "description": "Debug microcontrollers via OpenOCD: flash, breakpoints, memory, registers and variables.",
-  "version": "0.1.0",
+  "version": "0.4.1",
   "repository": {
     "url": "https://github.com/microhenrio/openocd-mcp",
     "source": "github"
@@ -13,7 +13,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "openocd-mcp",
-      "version": "0.1.0",
+      "version": "0.4.1",
       "runtimeHint": "uvx",
       "transport": { "type": "stdio" },
       "environmentVariables": [
@@ -25,6 +25,11 @@
         {
           "name": "OPENOCD_MCP_CONFIG",
           "description": "Path to openocd-mcp.json config; optional.",
+          "isRequired": false
+        },
+        {
+          "name": "OPENOCD_MCP_READONLY",
+          "description": "Set to 1 to force read-only mode; optional.",
           "isRequired": false
         }
       ]
@@ -53,8 +58,23 @@
       "input_schema": { "type": "object", "properties": {} }
     },
     {
+      "name": "step",
+      "description": "Single-step the CPU.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
       "name": "status",
-      "description": "Return CPU status and PC.",
+      "description": "Return CPU status and program counter.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "start_openocd",
+      "description": "Start the OpenOCD process without connecting.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "stop_openocd",
+      "description": "Stop the OpenOCD process.",
       "input_schema": { "type": "object", "properties": {} }
     },
 
@@ -70,19 +90,13 @@
       }
     },
     {
-      "name": "flash_verify",
-      "description": "Verify flashed firmware.",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "path": { "type": "string" }
-        },
-        "required": ["path"]
-      }
+      "name": "flash_info",
+      "description": "Show flash bank information.",
+      "input_schema": { "type": "object", "properties": {} }
     },
     {
       "name": "flash_erase_sector",
-      "description": "Erase a flash sector.",
+      "description": "Erase a flash sector (requires allow_flash_erase permission).",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -91,10 +105,21 @@
         "required": ["address"]
       }
     },
+    {
+      "name": "load_elf",
+      "description": "Load an ELF file for symbol and DWARF type resolution.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" }
+        },
+        "required": ["path"]
+      }
+    },
 
     {
       "name": "read_variable",
-      "description": "Read a variable by name.",
+      "description": "Read a variable by name from the ELF symbol table.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -116,20 +141,26 @@
       }
     },
     {
-      "name": "live_watch_variable",
-      "description": "Watch a variable without halting the CPU.",
+      "name": "list_variables",
+      "description": "List all variables found in the ELF symbol table.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "watch_variables",
+      "description": "Sample one or more variables repeatedly without halting the CPU.",
       "input_schema": {
         "type": "object",
         "properties": {
-          "name": { "type": "string" }
+          "names": { "type": "array", "items": { "type": "string" } },
+          "duration": { "type": "number" }
         },
-        "required": ["name"]
+        "required": ["names"]
       }
     },
 
     {
       "name": "read_memory",
-      "description": "Read raw memory.",
+      "description": "Read raw memory at an address.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -141,7 +172,7 @@
     },
     {
       "name": "write_memory",
-      "description": "Write raw memory.",
+      "description": "Write a value to a memory address.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -151,22 +182,15 @@
         "required": ["address", "value"]
       }
     },
-    {
-      "name": "dump_memory",
-      "description": "Dump memory region.",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "address": { "type": "integer" },
-          "length": { "type": "integer" }
-        },
-        "required": ["address", "length"]
-      }
-    },
 
     {
+      "name": "read_registers",
+      "description": "Read all CPU registers.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
       "name": "read_register",
-      "description": "Read a CPU register.",
+      "description": "Read a single CPU register.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -189,8 +213,30 @@
     },
 
     {
+      "name": "load_svd",
+      "description": "Load a CMSIS-SVD file for peripheral register resolution.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "path": { "type": "string" }
+        },
+        "required": ["path"]
+      }
+    },
+    {
+      "name": "read_peripheral",
+      "description": "Read all registers of a peripheral and decode their bitfields.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "peripheral": { "type": "string" }
+        },
+        "required": ["peripheral"]
+      }
+    },
+    {
       "name": "read_peripheral_register",
-      "description": "Read a peripheral register by name.",
+      "description": "Read a peripheral register by name (e.g. GPIOA.MODER).",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -213,7 +259,7 @@
     },
     {
       "name": "list_peripheral_registers",
-      "description": "List registers of a peripheral.",
+      "description": "List all registers of a peripheral.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -224,8 +270,8 @@
     },
 
     {
-      "name": "set_breakpoint",
-      "description": "Set a breakpoint.",
+      "name": "add_breakpoint",
+      "description": "Set a hardware or software breakpoint at an address.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -235,8 +281,19 @@
       }
     },
     {
-      "name": "set_conditional_breakpoint",
-      "description": "Set a conditional breakpoint.",
+      "name": "remove_breakpoint",
+      "description": "Remove a breakpoint.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "address": { "type": "integer" }
+        },
+        "required": ["address"]
+      }
+    },
+    {
+      "name": "add_conditional_breakpoint",
+      "description": "Set a breakpoint that halts only when a TCL condition is true.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -247,20 +304,8 @@
       }
     },
     {
-      "name": "set_hitcount_breakpoint",
-      "description": "Set a hitcount breakpoint.",
-      "input_schema": {
-        "type": "object",
-        "properties": {
-          "address": { "type": "integer" },
-          "count": { "type": "integer" }
-        },
-        "required": ["address", "count"]
-      }
-    },
-    {
-      "name": "clear_breakpoint",
-      "description": "Clear a breakpoint.",
+      "name": "remove_conditional_breakpoint",
+      "description": "Remove a conditional breakpoint.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -269,22 +314,32 @@
         "required": ["address"]
       }
     },
+    {
+      "name": "list_breakpoints",
+      "description": "List all active breakpoints.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
+    {
+      "name": "remove_all_breakpoints",
+      "description": "Remove all breakpoints.",
+      "input_schema": { "type": "object", "properties": {} }
+    },
 
     {
-      "name": "set_watchpoint",
-      "description": "Set a watchpoint.",
+      "name": "add_watchpoint",
+      "description": "Set a hardware watchpoint that halts on read/write/access to an address.",
       "input_schema": {
         "type": "object",
         "properties": {
           "address": { "type": "integer" },
-          "type": { "type": "string" }
+          "type": { "type": "string", "enum": ["r", "w", "a"] }
         },
         "required": ["address", "type"]
       }
     },
     {
-      "name": "clear_watchpoint",
-      "description": "Clear a watchpoint.",
+      "name": "remove_watchpoint",
+      "description": "Remove a watchpoint.",
       "input_schema": {
         "type": "object",
         "properties": {
@@ -295,30 +350,43 @@
     },
 
     {
+      "name": "configure",
+      "description": "Set session configuration (interface, target, ELF, SVD, transport).",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "interface_cfg": { "type": "string" },
+          "target_cfg": { "type": "string" },
+          "elf_file": { "type": "string" },
+          "svd_file": { "type": "string" },
+          "transport": { "type": "string" }
+        }
+      }
+    },
+    {
       "name": "show_config",
-      "description": "Show active MCP configuration.",
+      "description": "Show active configuration and permissions.",
       "input_schema": { "type": "object", "properties": {} }
     },
     {
       "name": "set_permissions",
-      "description": "Set security permissions.",
+      "description": "Set safety permissions (read_only, allow_flash, allow_memory_write, etc.).",
       "input_schema": {
         "type": "object",
         "properties": {
-          "permissions": { "type": "string" }
+          "permissions": { "type": "object" }
         },
         "required": ["permissions"]
       }
     },
     {
-      "name": "get_permissions",
-      "description": "Get active permissions.",
+      "name": "install_openocd",
+      "description": "Download and cache the OpenOCD binary for the current platform.",
       "input_schema": { "type": "object", "properties": {} }
     },
-
     {
       "name": "run_command",
-      "description": "Run a raw OpenOCD command.",
+      "description": "Run a raw OpenOCD TCL command (requires allow_raw_command permission).",
       "input_schema": {
         "type": "object",
         "properties": {
