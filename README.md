@@ -366,7 +366,9 @@ can be:
 
 - a **variable name** (`uwTick`, `commsService`) → looked up in the ELF; if it's a
   **struct, union, or array** it gets an expand triangle, and its members/elements
-  are shown **auto-typed from DWARF** (signed, float, pointer, enum, nested structs);
+  are shown **auto-typed from DWARF** (signed, float, pointer, enum, bitfields,
+  nested structs). **Enums** show the symbolic name (`STATE_HEATING (1)`), and
+  **C bitfields** show just their own bit(s) rather than the whole storage word;
 - a **hex address** with optional size (`0x20000000`, `0x20000000:2`) → read directly.
 
 A **Format** dropdown switches how values are shown — **Auto (by C type) / Hex /

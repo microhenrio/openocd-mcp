@@ -23,10 +23,10 @@ _ENC = {1: "address", 2: "bool", 4: "float", 5: "signed", 6: "signed",
 class TypeNode:
     """A node in a variable's type tree. Leaves have kind base/pointer/enum."""
     __slots__ = ("name", "offset", "size", "kind", "encoding", "type_name", "children",
-                 "bit_size", "bit_offset")
+                 "bit_size", "bit_offset", "enum_values")
 
     def __init__(self, name, offset, size, kind, encoding="", type_name="", children=None,
-                 bit_size=None, bit_offset=None):
+                 bit_size=None, bit_offset=None, enum_values=None):
         self.name = name            # field/element/variable name
         self.offset = offset        # byte offset from the root variable's address
         self.size = size            # byte size of the storage unit read from the target
@@ -36,6 +36,7 @@ class TypeNode:
         self.children = children or []
         self.bit_size = bit_size    # C bitfield width in bits, or None if not a bitfield
         self.bit_offset = bit_offset  # bit position (from LSB) within the storage unit
+        self.enum_values = enum_values  # for kind == "enum": {int value: enumerator name}
 
     @property
     def is_aggregate(self):
@@ -141,7 +142,19 @@ class TypeResolver:
         if tag == "DW_TAG_pointer_type":
             return TypeNode(name, offset, size or 4, "pointer", "address", tn)
         if tag == "DW_TAG_enumeration_type":
-            return TypeNode(name, offset, size or 4, "enum", "unsigned", tn)
+            enum_values = {}
+            for e in die.iter_children():
+                if e.tag != "DW_TAG_enumerator":
+                    continue
+                cv = e.attributes.get("DW_AT_const_value")
+                if cv is None:
+                    continue
+                v = cv.value
+                if isinstance(v, bytes):
+                    v = int.from_bytes(v, "little", signed=True)
+                enum_values[v] = self._name(e)
+            return TypeNode(name, offset, size or 4, "enum", "unsigned", tn,
+                             enum_values=enum_values)
         if tag in ("DW_TAG_structure_type", "DW_TAG_union_type"):
             kind = "struct" if tag.endswith("structure_type") else "union"
             node = TypeNode(name, offset, size, kind, "", tn)

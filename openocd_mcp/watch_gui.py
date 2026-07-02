@@ -82,6 +82,10 @@ def present(node, value, fmt):
         return format_value(value, size, fmt, bits=bits)
     if node.bit_size:
         return str(value)
+    if node.kind == "enum" and node.enum_values:
+        name = node.enum_values.get(value)
+        if name:
+            return f"{name} ({value})"
     if node.kind == "pointer" or node.encoding == "address":
         return f"0x{value:0{size * 2}X}"
     if node.encoding == "signed":
