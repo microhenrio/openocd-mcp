@@ -22,16 +22,20 @@ _ENC = {1: "address", 2: "bool", 4: "float", 5: "signed", 6: "signed",
 
 class TypeNode:
     """A node in a variable's type tree. Leaves have kind base/pointer/enum."""
-    __slots__ = ("name", "offset", "size", "kind", "encoding", "type_name", "children")
+    __slots__ = ("name", "offset", "size", "kind", "encoding", "type_name", "children",
+                 "bit_size", "bit_offset")
 
-    def __init__(self, name, offset, size, kind, encoding="", type_name="", children=None):
+    def __init__(self, name, offset, size, kind, encoding="", type_name="", children=None,
+                 bit_size=None, bit_offset=None):
         self.name = name            # field/element/variable name
         self.offset = offset        # byte offset from the root variable's address
-        self.size = size            # byte size
+        self.size = size            # byte size of the storage unit read from the target
         self.kind = kind            # base|pointer|enum|struct|union|array|unknown
         self.encoding = encoding    # for leaves: signed|unsigned|float|bool|address|char
         self.type_name = type_name  # e.g. "uint32_t", "struct foo", "int[4]"
         self.children = children or []
+        self.bit_size = bit_size    # C bitfield width in bits, or None if not a bitfield
+        self.bit_offset = bit_offset  # bit position (from LSB) within the storage unit
 
     @property
     def is_aggregate(self):
@@ -63,6 +67,37 @@ class TypeResolver:
             return "void"
         a = die.attributes.get("DW_AT_name")
         return a.value.decode("utf-8", "replace") if a else die.tag.replace("DW_TAG_", "")
+
+    def _bitfield_info(self, m, underlying_size):
+        """Return (byte_offset_in_struct, bit_offset_from_lsb, bit_len, unit_size)
+        for a bitfield member DIE `m`, or None if it isn't a bitfield."""
+        bsz = m.attributes.get("DW_AT_bit_size")
+        if bsz is None:
+            return None
+        bit_len = bsz.value
+        unit_size = underlying_size or 4
+
+        # DWARF 4/5: total bit offset from the start of the containing struct.
+        dbo = m.attributes.get("DW_AT_data_bit_offset")
+        if dbo is not None:
+            total_bit = dbo.value
+            unit_index = total_bit // (unit_size * 8)
+            byte_off = unit_index * unit_size
+            bit_off = total_bit - byte_off * 8
+            return byte_off, bit_off, bit_len, unit_size
+
+        # DWARF <=3: DW_AT_bit_offset counts from the storage unit's MSB
+        # (little-endian target, e.g. Cortex-M).
+        legacy_bo = m.attributes.get("DW_AT_bit_offset")
+        byte_size_attr = m.attributes.get("DW_AT_byte_size")
+        if legacy_bo is not None and byte_size_attr is not None:
+            storage_size = byte_size_attr.value
+            mloc = m.attributes.get("DW_AT_data_member_location")
+            byte_off = mloc.value if (mloc and isinstance(mloc.value, int)) else 0
+            bit_off = storage_size * 8 - legacy_bo.value - bit_len
+            return byte_off, bit_off, bit_len, storage_size
+
+        return None
 
     def _build_index(self):
         self._index = {}
@@ -117,9 +152,16 @@ class TypeResolver:
                     mloc = m.attributes.get("DW_AT_data_member_location")
                     moff = mloc.value if (mloc and isinstance(mloc.value, int)) else 0
                     mname = self._name(m)
-                    node.children.append(
-                        self._build(m.get_DIE_from_attribute("DW_AT_type"),
-                                    mname, offset + moff, depth + 1))
+                    child = self._build(m.get_DIE_from_attribute("DW_AT_type"),
+                                         mname, offset + moff, depth + 1)
+                    bf = self._bitfield_info(m, child.size)
+                    if bf:
+                        byte_off, bit_off, bit_len, unit_size = bf
+                        child.offset = offset + byte_off
+                        child.size = unit_size
+                        child.bit_offset = bit_off
+                        child.bit_size = bit_len
+                    node.children.append(child)
             return node
         if tag == "DW_TAG_array_type":
             elem = die.get_DIE_from_attribute("DW_AT_type") if "DW_AT_type" in die.attributes else None
@@ -158,4 +200,7 @@ def decode_leaf(node, data: bytes):
             return struct.unpack("<f", raw)[0]
         if size == 8:
             return struct.unpack("<d", raw)[0]
-    return int.from_bytes(raw, "little")
+    value = int.from_bytes(raw, "little")
+    if node.bit_size:
+        value = (value >> (node.bit_offset or 0)) & ((1 << node.bit_size) - 1)
+    return value

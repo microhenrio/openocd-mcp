@@ -3,7 +3,7 @@
   "name": "io.github.microhenrio/openocd-mcp",
   "title": "OpenOCD Debugger",
   "description": "Debug microcontrollers via OpenOCD: flash, breakpoints, memory, registers and variables.",
-  "version": "0.4.3",
+  "version": "0.4.4",
   "repository": {
     "url": "https://github.com/microhenrio/openocd-mcp",
     "source": "github"
@@ -13,7 +13,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "openocd-mcp",
-      "version": "0.4.3",
+      "version": "0.4.4",
       "runtimeHint": "uvx",
       "transport": { "type": "stdio" },
       "environmentVariables": [

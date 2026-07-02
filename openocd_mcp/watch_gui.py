@@ -46,14 +46,19 @@ def _as_address(token):
     return int(m.group(1), 16), int(m.group(2)) if m.group(2) else 4
 
 
-def format_value(value, size, fmt="hex") -> str:
-    """Render a raw integer (or float) value in an explicit format."""
+def format_value(value, size, fmt="hex", bits=None) -> str:
+    """Render a raw integer (or float) value in an explicit format.
+
+    `bits` overrides the bit width used for hex/binary padding and sign
+    extension — pass a bitfield's own width so a 1-bit flag renders as
+    "0b1", not the full 32-bit storage word it was packed into.
+    """
     if value is None:
         return "-"
     if isinstance(value, float):
         return f"{value:.6g}"
     size = size or 4
-    bits = size * 8
+    bits = bits or size * 8
     if fmt == "dec":
         return str(value)
     if fmt == "int":
@@ -62,7 +67,7 @@ def format_value(value, size, fmt="hex") -> str:
         return f"{struct.unpack('<f', value.to_bytes(4, 'little'))[0]:.6g}" if size == 4 else "(needs 4 bytes)"
     if fmt == "bin":
         return f"0b{value:0{bits}b}"
-    return f"0x{value:0{size * 2}X}"
+    return f"0x{value:0{(bits + 3) // 4}X}"
 
 
 def present(node, value, fmt):
@@ -72,12 +77,14 @@ def present(node, value, fmt):
     if isinstance(value, float):
         return f"{value:.6g}"
     size = node.size or 4
+    bits = node.bit_size or size * 8
     if fmt != "auto":
-        return format_value(value, size, fmt)
+        return format_value(value, size, fmt, bits=bits)
+    if node.bit_size:
+        return str(value)
     if node.kind == "pointer" or node.encoding == "address":
         return f"0x{value:0{size * 2}X}"
     if node.encoding == "signed":
-        bits = size * 8
         return str(value - (1 << bits) if value >= (1 << (bits - 1)) else value)
     if node.encoding == "bool":
         return "true" if value else "false"
