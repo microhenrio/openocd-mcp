@@ -698,9 +698,13 @@ def watch_variables(names: str, samples: int = 10, interval_ms: int = 200) -> st
 
     This tool is one-shot and returns a flat text table. For an open-ended,
     auto-refreshing GUI window with expandable structs/arrays, there is a
-    separate standalone program called `openocd-watch` — it is NOT an MCP tool
-    and cannot be launched by an assistant; tell the user to run it themselves
-    in a terminal, e.g.:
+    separate standalone program called `openocd-watch`. It is NOT reachable
+    through this MCP server as a tool call — but it is an ordinary console
+    script, so an assistant with its own shell/process-launch capability
+    (e.g. a coding agent with a terminal tool) MAY run it directly as a
+    background process for the user, same as it would run any other CLI
+    program. An assistant limited to this server's MCP tools cannot reach it
+    and should tell the user to run it themselves instead. Invocation:
         openocd-watch <var1> <var2> --elf <path/to/firmware.elf>
     Add --autostart if OpenOCD isn't already running.
     """
