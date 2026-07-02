@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "openocd-mcp"
-version = "0.4.1"
+version = "0.4.2"
 description = "MCP server to debug microcontrollers from Claude through OpenOCD (flash, halt/step, memory/registers, breakpoints, variables and peripheral registers by name)."
 readme = "README.md"
 requires-python = ">=3.10"

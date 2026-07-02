@@ -695,6 +695,14 @@ def watch_variables(names: str, samples: int = 10, interval_ms: int = 200) -> st
     Works for RAM globals/statics (read live via background memory access).
     CPU registers need a halt and aren't supported here. Multi-word values are
     read non-atomically, so a >4-byte value may be momentarily inconsistent.
+
+    This tool is one-shot and returns a flat text table. For an open-ended,
+    auto-refreshing GUI window with expandable structs/arrays, there is a
+    separate standalone program called `openocd-watch` — it is NOT an MCP tool
+    and cannot be launched by an assistant; tell the user to run it themselves
+    in a terminal, e.g.:
+        openocd-watch <var1> <var2> --elf <path/to/firmware.elf>
+    Add --autostart if OpenOCD isn't already running.
     """
     if _symbols.count() == 0:
         elf = config.settings.get("elf_file")

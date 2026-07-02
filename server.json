@@ -3,7 +3,7 @@
   "name": "io.github.microhenrio/openocd-mcp",
   "title": "OpenOCD Debugger",
   "description": "Debug microcontrollers via OpenOCD: flash, breakpoints, memory, registers and variables.",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "repository": {
     "url": "https://github.com/microhenrio/openocd-mcp",
     "source": "github"
@@ -13,7 +13,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "openocd-mcp",
-      "version": "0.4.1",
+      "version": "0.4.2",
       "runtimeHint": "uvx",
       "transport": { "type": "stdio" },
       "environmentVariables": [
@@ -147,7 +147,7 @@
     },
     {
       "name": "watch_variables",
-      "description": "Sample one or more variables repeatedly without halting the CPU.",
+      "description": "Sample one or more variables repeatedly without halting the CPU, returning a text table. For an auto-refreshing GUI window instead, tell the user to run the separate 'openocd-watch' command themselves — it is not an MCP tool.",
       "input_schema": {
         "type": "object",
         "properties": {
